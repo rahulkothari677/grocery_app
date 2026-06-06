@@ -1,86 +1,109 @@
-# Production Blueprint: Swiggy/Zomato-Grade Hyperlocal Marketplace Expansion
+# Production Blueprint: Hyperlocal Self-Delivery & Subscription Marketplace
 
-This blueprint defines the architecture, data schemas, and user flows to scale **LuxeGrocer** from a prototype into a production-grade hyperlocal marketplace.
+This blueprint defines the architecture, data schemas, monetization rules, and operational flows for **LuxeGrocer** scaled specifically to a **Merchant-Self-Delivery & Platform-Subscription** business model.
 
 ---
 
-## 🗺️ Implementation Phases
+## 📐 Core Business Architecture
+
+Unlike platforms that process payments and dispatch third-party gig riders, LuxeGrocer operates as a direct neighborhood digital-shelf connector:
+
+1. **Merchant-Fulfilled Delivery (Self-Delivery)**: Stores utilize their own delivery boys/staff. Deliveries are dispatched directly by the store and verified at the customer's doorstep using a secure 4-digit OTP.
+2. **Direct Peer-to-Peer Payments**: Payments flow directly from the customer's wallet to the merchant (via Cash on Delivery or direct merchant UPI). The platform does **not** process, hold, or split customer payments.
+3. **Monetization via Subscription**: The platform charges merchants a recurring subscription fee (e.g., monthly/yearly shelf-space fee) to keep their storefront active. Stores with expired subscriptions are automatically suspended.
+
+---
+
+## 🗺️ Feature Priority Roadmap
+
+We prioritize high-value operational and monetization features over low-impact social/review tools:
 
 ```mermaid
 graph TD
-    A[Phase 1: Core UX & Operations - COMPLETED] --> B[Phase 2: Hyperlocal Logistics & Catalog - COMPLETED]
-    B --> C[Phase 3: Security, Catalog Administration & Customer Engagement - ACTIVE]
-    C --> D[Phase 4: Simulated Logistics maps & Real-Time Notification hubs - FUTURE]
+    A[Phase 1 & 2: Core UX & Hyperlocal Radius - COMPLETED] --> B[Phase 3: Credentials, Variant Builder & Reviews - COMPLETED]
+    B --> C[Phase 4: Merchant Subscriptions & Suspensions - HIGH PRIORITY]
+    C --> D[Phase 5: Direct UPI Payments & QR Code Config - HIGH PRIORITY]
+    D --> E[Phase 6: Local Delivery Staff & Assignment Hub - MEDIUM PRIORITY]
+    E --> F[Phase 7: Out-of-Stock Substitutions & Chat Connect - MEDIUM PRIORITY]
 ```
 
 ---
 
-## Phase 1 & 2: Core Platform & Logistics (Completed & Deployed)
-1. **Isolated Frontends & Ports**: Separated frontends served on port 8001 (customer-app) and 8002 (merchant-app) talking to Express backend on port 5000.
-2. **Customer Account Center (Drawer UI)**: Slide dashboard with profile, saved address editor, voucher wallet, and reorder utilities.
-3. **Hyperlocal Logistics & radius rules**: Haversine distance limit validation blocking checkout, dynamic tiered delivery fees (₹20 base + ₹10/km, free above ₹300).
-4. **Interactive comparative search**: Search items globally across neighborhood stores, sorting by nearest distance.
-5. **Product Variants support**: Database support and dropdown selectors for variants (e.g. Milk 500ml vs 1L) with variant-level stock deduction.
+## 🚀 Proposed Features & Technical Specifications
 
----
+### Phase 4: Merchant Subscriptions & Suspensions (Monetization Engine)
+To ensure the platform generates revenue, we will implement a robust subscription billing management center for store owners.
 
-## Phase 3: Security, Catalog Administration & Customer Engagement (Active Plan)
-
-### 1. Account Settings & Password Recovery Flow
-
-#### Data Schema updates:
-- We will store a `recoveryCode` and `recoveryExpiry` temporarily in memory or in the `users` table for password resets.
-
-```mermaid
-sequenceDiagram
-    actor User as Customer / Merchant
-    participant App as Frontend Client
-    participant API as Express Server
-    
-    User->>App: Clicks "Forgot Password?"
-    App->>User: Prompts for Account Email
-    User->>App: Enters email and clicks "Send OTP"
-    App->>API: POST /api/auth/forgot-password {email}
-    API->>API: Generates recovery code
-    API-->>App: Responds 200 (shows alert OTP)
-    App->>User: Prompts for OTP & New Password
-    User->>App: Inputs OTP and sets New Password
-    App->>API: POST /api/auth/reset-password {email, otp, password}
-    API->>API: Verifies OTP & hashes new password
-    API-->>App: Password Updated Success
-    App->>User: Renders Login screen
-```
-
-### 2. Merchant Catalog Variant Builder & Stock Toggles
-- **Variants List Builder UI**: In the Add/Edit Product listing modal inside `merchant-app/index.html`, add a dynamic section allowing merchants to add/remove custom variant lines:
-  - Input field for Variant Name (e.g. `100g`, `500ml`).
-  - Input field for price (e.g. `45.00`).
-  - Input field for stock count (e.g. `25`).
-- **One-click Quick Stock Toggles**: A button in the inventory listing to toggle stock between `0` (Out of Stock) and `20` (In Stock) instantly via API without opening modal forms.
-
-### 3. Hyperlocal UI Features: Favorites Bookmarking & Sort Filters
-- **Storefront Heart Bookmarking**: Store favorite merchant IDs in browser `localStorage`. Bookmarked stores render first in a carousel list labeled `❤️ Favorite Neighborhood Stores`.
-- **Landing Sorting**: Sort landing stores by:
-  - **Fastest Sourcing**: Delivery times (based on distance).
-  - **Highest Rating**: Store ratings.
-  - **Lowest Delivery Fee**: Base delivery fees.
-
-### 4. Post-Delivery Feedback, Reviews & Reviews Wall
-- **Customer Ratings Modal**: Automatically triggers on the customer app when an order status shifts to `Delivered`.
-  - Star score (1 to 5 stars selection).
-  - Comment textarea box.
-- **Reviews Table schema**:
+#### Technical Specifications:
+* **Database Schema Expansion (`users` / `stores` table)**:
   ```json
-  "reviews": [
-    {
-      "id": "rev-12345",
-      "storeId": "store-1",
-      "orderId": "order-129882",
-      "customerName": "Rahul Sharma",
-      "rating": 5,
-      "text": "Extremely fresh milk and butter!",
-      "timestamp": "2026-06-06T13:20:00.000Z"
-    }
-  ]
+  "subscription": {
+    "plan": "Premium Monthly", 
+    "status": "Active", // "Active", "Expired", "Suspended"
+    "expiresAt": "2026-07-06T00:00:00.000Z",
+    "paymentDetails": { "cardLast4": "4242", "gateway": "MockStripe" }
+  }
   ```
-- **Merchant reviews wall view**: Renders a dedicated sidebar panel showing customer comments and overall store rating graphs.
+* **Merchant Billing Portal Panel**: A new tab pane inside the merchant console to view active subscription stats, renew plans, or upgrade from Free Trial via a simulated premium card checkout form.
+* **Enforced Suspension Sweep**: A daily background cron job (or request hook) checks store subscriptions. If `now > expiresAt`, status transitions to `Suspended`.
+* **Storefront Visibility Block**: Suspended stores are greyed out on the customer app with a "SUSPENDED" banner overlay, and checkout is blocked with an alert if a cart contains products from a suspended store.
+
+---
+
+### Phase 5: Direct UPI Payments & QR Code Configuration
+Since customer payments go directly to the store owners, we must enable merchants to configure their UPI credentials to receive digital payments during checkout.
+
+#### Technical Specifications:
+* **Merchant UPI Settings UI**: Fields added to the Store settings page in the merchant console:
+  * Merchant UPI VPA Address (e.g., `greenshop@okaxis`).
+  * Payee Name (e.g., `Green Valley Boutique`).
+* **Dynamic UPI QR Code Generator**: During checkout on the customer app, if "UPI Payment" is selected, the app dynamically constructs a standard UPI payment URL:
+  `upi://pay?pa=greenshop@okaxis&pn=Green%20Valley%20Boutique&am=260.00&cu=INR`
+  It renders this URL as a scannable QR Code on the checkout drawer.
+* **Payment Reference Check**: Customer inputs their UPI Transaction Ref No. (UTR) / Transaction ID to submit the order. The merchant orders queue displays this Transaction ID so the store owner can verify the credit in their bank app before accepting the order.
+
+---
+
+### Phase 6: Local Delivery Staff Management & Assignment Hub
+Since stores deliver using their own employees, they need an internal registry to organize dispatches.
+
+#### Technical Specifications:
+* **Delivery Staff Database Schema**:
+  ```json
+  "stores": [{
+    "id": "store-1",
+    "deliveryStaff": [
+      { "id": "staff-1", "name": "Ramesh Kumar", "phone": "+91 99887 76655", "status": "Available" },
+      { "id": "staff-2", "name": "Suresh Dev", "phone": "+91 98765 43210", "status": "Busy" }
+    ]
+  }]
+  ```
+* **Delivery Registry UI**: A sub-panel in the merchant settings to add, edit, or delete delivery staff members.
+* **Dispatch Assignment Modal**: When a merchant clicks "Dispatch Rider" on a `Preparing` order, a modal pops up prompting them to assign a registered delivery staff member.
+* **Customer-Facing Rider Card**: The customer order tracker dynamically displays:
+  `🛵 Assigned Store Delivery Partner: Ramesh Kumar (Call: +91 99887 76655)`
+  It enables the customer to call their neighborhood delivery boy directly.
+
+---
+
+### Phase 7: Out-of-Stock Item Substitutions & Chat Connect
+In self-delivery grocer networks, items frequently sell out. Instead of cancelling the order, merchants coordinate substitutions directly.
+
+#### Technical Specifications:
+* **Substitution Proposals Schema**:
+  ```json
+  "orders": [{
+    "id": "order-12345",
+    "substitutionProposal": {
+      "originalItemId": "p1-2",
+      "suggestedProduct": { "id": "p1-4", "name": "Fresh Paneer (Cottage Cheese)", "price": 110.00 },
+      "status": "Pending" // "Pending", "Accepted", "Declined"
+    }
+  }]
+  ```
+* **Merchant Substitution UI**: Next to each item in the merchant's active orders queue, a "Suggest Alternative" button opens their catalog to select a replacement item.
+* **Real-time Customer Prompt**: The customer tracking view receives a real-time EventSource notification, popping up a modal: 
+  `Store suggests replacing Organic Greek Yogurt (₹120) with Fresh Paneer (₹110). Adjust order?`
+  * **Accept**: Automatically swaps the item in the database, recalculates totals, and updates both dashboards.
+  * **Decline**: Removes the item, deducts its price from the order total, and refunds the item value.
+* **Order Chat connect**: A basic overlay chat box on both views utilizing direct SSE sync logs, allowing merchants and customers to message each other directly regarding gate codes, delays, or custom requests.

@@ -166,6 +166,18 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.checkoutName.value = user.name;
             elements.checkoutPhone.value = user.phone || '';
             elements.checkoutAddress.value = user.address || '';
+
+            // Check for active orders to restore tracking screen
+            try {
+                const orders = await db.getOrders();
+                const activeOrder = orders.find(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+                if (activeOrder) {
+                    await startOrderTracking(activeOrder);
+                    await switchView('order-tracker');
+                }
+            } catch (err) {
+                console.error("Error checking active orders on login/startup:", err);
+            }
         } else {
             elements.authTriggerText.innerText = 'Sign In';
             elements.btnAuthTrigger.title = 'Login or Register';
@@ -1775,10 +1787,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Bootstrapping ---
-    db.initDatabase();
-    loadCartFromStorage();
-    initAuth();
-    updateLocationUI().then(() => {
-        switchView('landing');
-    });
+    async function bootstrap() {
+        db.initDatabase();
+        loadCartFromStorage();
+        await initAuth();
+        await updateLocationUI();
+        if (!trackingOrder) {
+            await switchView('landing');
+        }
+    }
+    bootstrap();
 });

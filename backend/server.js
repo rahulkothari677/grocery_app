@@ -14,6 +14,17 @@ const JWT_SECRET = 'luxegrocer-super-secret-jwt-key-2026';
 app.use(cors());
 app.use(express.json({ limit: '20mb' })); // Higher limit for Base64 image payloads
 
+// Request Logger
+app.use((req, res, next) => {
+    console.log(`[${new Date().toISOString()}] ${req.method} ${req.url}`);
+    if (req.method === 'POST' || req.method === 'PUT') {
+        const bodyCopy = { ...req.body };
+        if (bodyCopy.password) bodyCopy.password = '********';
+        console.log('  Body:', JSON.stringify(bodyCopy));
+    }
+    next();
+});
+
 const DB_PATH = path.join(__dirname, 'db.json');
 const UPLOADS_DIR = path.join(__dirname, 'uploads');
 

@@ -18,8 +18,7 @@ const USER_LOCATION = {
 class LuxeStore {
     constructor() {
         this.baseUrl = 'http://localhost:5000/api';
-        const isMerchant = typeof window !== 'undefined' && window.location.pathname.includes('merchant.html');
-        this.tokenKey = isMerchant ? 'luxegrocer_merchant_auth_token' : 'luxegrocer_customer_auth_token';
+        this.tokenKey = 'luxegrocer_customer_auth_token';
         this.token = localStorage.getItem(this.tokenKey) || null;
         this.currentUser = null;
         this.initDatabase();

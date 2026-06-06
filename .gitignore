@@ -1,6 +1,7 @@
 node_modules/
-server/db.json
-server/uploads/*
-!server/uploads/.gitkeep
+backend/node_modules/
+backend/db.json
+backend/uploads/*
+!backend/uploads/.gitkeep
 .DS_Store
 *.log

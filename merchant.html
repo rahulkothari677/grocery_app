@@ -21,6 +21,9 @@
 
             <!-- Header Action Controls -->
             <div class="nav-actions">
+                <button class="btn-premium" id="btn-merchant-logout" style="background: transparent; border: 1.5px solid var(--danger); color: var(--danger); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+                </button>
                 <a href="index.html" class="btn-premium" style="background: transparent; border: 1.5px solid var(--primary); color: var(--primary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;">
                     <i class="fa-solid fa-cart-shopping"></i> Consumer App
                 </a>
@@ -33,6 +36,66 @@
 
         <!-- VIEW: Merchant Store Owner Portal Dashboard -->
         <section id="view-owner-portal" class="view-section" style="display: block; margin-top: 30px;">
+            <!-- Merchant Welcome & Auth Screen -->
+            <div id="merchant-auth-workspace" class="glass-panel" style="max-width: 450px; margin: 40px auto; padding: 36px; display: block; box-shadow: var(--shadow-premium);">
+                <div style="text-align: center; margin-bottom: 28px;">
+                    <div style="font-size: 3.5rem; color: var(--secondary); margin-bottom: 12px;"><i class="fa-solid fa-user-lock"></i></div>
+                    <h2 id="merchant-auth-title" style="font-size: 1.8rem; font-weight: 700;">Partner Portal</h2>
+                    <p id="merchant-auth-subtitle" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Access your digital shelf manager & deliveries console</p>
+                </div>
+
+                <!-- Login Form -->
+                <form id="form-merchant-login" style="display: flex; flex-direction: column; gap: 16px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Merchant Email</label>
+                        <input type="email" id="merchant-login-email" class="glass-input" required placeholder="manager@luxe.com" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
+                        <input type="password" id="merchant-login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                    </div>
+                    <button type="submit" class="btn-premium" style="width: 100%; padding: 12px; margin-top: 10px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Secure Sign In</button>
+                    
+                    <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
+                        New partner? <a href="#" id="link-merchant-to-register" style="color: var(--secondary); font-weight: 600; text-decoration: none;">Create Merchant Account</a>
+                    </div>
+                </form>
+
+                <!-- Signup Form -->
+                <form id="form-merchant-register" style="display: none; flex-direction: column; gap: 14px;">
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Merchant Name</label>
+                        <input type="text" id="merchant-reg-name" class="glass-input" required placeholder="Alex Mercer" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Email Address</label>
+                        <input type="email" id="merchant-reg-email" class="glass-input" required placeholder="alex@luxe.com" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Password</label>
+                        <input type="password" id="merchant-reg-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Store Name</label>
+                        <input type="text" id="merchant-reg-store-name" class="glass-input" required placeholder="E.g., Mercer Organic Bakery" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Phone Number</label>
+                        <input type="tel" id="merchant-reg-phone" class="glass-input" required placeholder="+91 XXXXX XXXXX" style="width: 100%;">
+                    </div>
+                    <div class="form-group" style="margin: 0;">
+                        <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Shop Address</label>
+                        <input type="text" id="merchant-reg-address" class="glass-input" required placeholder="Shop No., Block, Locality" style="width: 100%;">
+                    </div>
+                    
+                    <button type="submit" class="btn-premium" style="width: 100%; padding: 12px; margin-top: 10px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Register Store & Profile</button>
+                    
+                    <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 10px;">
+                        Already registered? <a href="#" id="link-merchant-to-login" style="color: var(--secondary); font-weight: 600; text-decoration: none;">Sign In</a>
+                    </div>
+                </form>
+            </div>
+
             <!-- Register Store Banner if no Store owned -->
             <div id="owner-no-store-alert" class="glass-panel" style="padding: 60px 30px; text-align: center; display: none;">
                 <span style="font-size: 4rem; display: block; margin-bottom: 20px;">🏪</span>

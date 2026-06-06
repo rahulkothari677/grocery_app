@@ -30,6 +30,11 @@
 
             <!-- Header Action Controls -->
             <div class="nav-actions">
+                <!-- Customer Login / Profile Button -->
+                <button class="btn-premium" id="btn-auth-trigger" style="background: transparent; border: 1.5px solid var(--primary); color: var(--primary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: inline-flex; align-items: center; gap: 8px;" title="Login or Register">
+                    <i class="fa-solid fa-user"></i> <span id="auth-trigger-text">Sign In</span>
+                </button>
+
                 <a href="merchant.html" class="btn-premium" style="background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;" title="Switch to the merchant/partner workspace">
                     <i class="fa-solid fa-shop"></i> Partner Portal
                 </a>
@@ -543,6 +548,65 @@
         </div>
     </div>
     
+    <!-- Customer Login / Sign-up Modal -->
+    <div class="modal-overlay" id="modal-auth" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; padding: 32px; position: relative;">
+            <button class="btn-icon" id="btn-close-auth-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            
+            <div id="auth-modal-header" style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 2.5rem; color: var(--primary); margin-bottom: 8px;"><i class="fa-solid fa-user-shield"></i></div>
+                <h3 id="auth-modal-title" style="font-size: 1.5rem; font-weight: 700;">Welcome to LuxeGrocer</h3>
+                <p id="auth-modal-subtitle" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Sign in to access premium local catalog shelves</p>
+            </div>
+            
+            <!-- Login Form -->
+            <form id="form-customer-login" style="display: flex; flex-direction: column; gap: 16px;">
+                <div class="input-group">
+                    <label for="login-email" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Email Address</label>
+                    <input type="email" id="login-email" class="glass-input" required placeholder="you@luxe.com" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="login-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
+                    <input type="password" id="login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; margin-top: 8px; padding: 12px;">Sign In</button>
+                <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
+                    Don't have an account? <a href="#" id="link-to-register" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign Up</a>
+                </div>
+            </form>
+            
+            <!-- Signup Form (Hidden by default) -->
+            <form id="form-customer-register" style="display: none; flex-direction: column; gap: 14px;">
+                <div class="input-group">
+                    <label for="reg-name" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Full Name</label>
+                    <input type="text" id="reg-name" class="glass-input" required placeholder="Alex Mercer" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="reg-email" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Email Address</label>
+                    <input type="email" id="reg-email" class="glass-input" required placeholder="alex@luxe.com" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="reg-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Password</label>
+                    <input type="password" id="reg-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="reg-phone" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Phone Number</label>
+                    <input type="tel" id="reg-phone" class="glass-input" required placeholder="+91 XXXXX XXXXX" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="reg-address" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Delivery Address</label>
+                    <input type="text" id="reg-address" class="glass-input" required placeholder="Apartment, Street, Area" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; margin-top: 8px; padding: 12px;">Create Account</button>
+                <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
+                    Already have an account? <a href="#" id="link-to-login" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign In</a>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- System Notification Banner (Toast) -->
     <div id="toast-notification" style="position: fixed; bottom: 24px; right: 24px; background: rgba(16,185,129,0.95); backdrop-filter: var(--glass-blur); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 16px 24px; border-radius: 12px; box-shadow: var(--shadow-premium); display: flex; align-items: center; gap: 12px; z-index: 3000; transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;">
         <span id="toast-icon"><i class="fa-solid fa-circle-check"></i></span>

@@ -136,10 +136,93 @@ document.addEventListener('DOMContentLoaded', () => {
         toastIcon: document.getElementById('toast-icon'),
         toastMessage: document.getElementById('toast-message'),
 
-        // Cart Upsell
         cartUpsellBox: document.getElementById('cart-upsell-box'),
-        cartUpsellListWrapper: document.getElementById('cart-upsell-list-wrapper')
+        cartUpsellListWrapper: document.getElementById('cart-upsell-list-wrapper'),
+
+        // Auth elements
+        btnAuthTrigger: document.getElementById('btn-auth-trigger'),
+        authTriggerText: document.getElementById('auth-trigger-text'),
+        modalAuth: document.getElementById('modal-auth'),
+        btnCloseAuthModal: document.getElementById('btn-close-auth-modal'),
+        formCustomerLogin: document.getElementById('form-customer-login'),
+        formCustomerRegister: document.getElementById('form-customer-register'),
+        loginEmail: document.getElementById('login-email'),
+        loginPassword: document.getElementById('login-password'),
+        regName: document.getElementById('reg-name'),
+        regEmail: document.getElementById('reg-email'),
+        regPassword: document.getElementById('reg-password'),
+        regPhone: document.getElementById('reg-phone'),
+        regAddress: document.getElementById('reg-address'),
+        linkToRegister: document.getElementById('link-to-register'),
+        linkToLogin: document.getElementById('link-to-login')
     };
+
+    // --- Customer Authentication Helpers ---
+    async function initAuth() {
+        const user = await db.loadCurrentUser();
+        if (user) {
+            elements.authTriggerText.innerText = user.name.split(' ')[0];
+            elements.btnAuthTrigger.title = `Logged in as ${user.name} (${user.role})`;
+            elements.checkoutName.value = user.name;
+            elements.checkoutPhone.value = user.phone || '';
+            elements.checkoutAddress.value = user.address || '';
+        } else {
+            elements.authTriggerText.innerText = 'Sign In';
+            elements.btnAuthTrigger.title = 'Login or Register';
+        }
+    }
+
+    function toggleAuthModal(show) {
+        if (show) {
+            elements.formCustomerLogin.reset();
+            elements.formCustomerRegister.reset();
+            elements.formCustomerLogin.style.display = 'flex';
+            elements.formCustomerRegister.style.display = 'none';
+            document.getElementById('auth-modal-title').innerText = "Welcome to LuxeGrocer";
+            document.getElementById('auth-modal-subtitle').innerText = "Sign in to access premium local catalog shelves";
+            elements.modalAuth.style.display = 'flex';
+            elements.modalAuth.classList.add('active');
+        } else {
+            elements.modalAuth.style.display = 'none';
+            elements.modalAuth.classList.remove('active');
+        }
+    }
+
+    async function handleLoginSubmit(e) {
+        e.preventDefault();
+        const email = elements.loginEmail.value.trim();
+        const password = elements.loginPassword.value;
+
+        const res = await db.login(email, password);
+        if (res.success) {
+            showToast(`Welcome back, ${res.user.name}!`, "success");
+            toggleAuthModal(false);
+            await initAuth();
+        } else {
+            showToast(res.error, "error");
+        }
+    }
+
+    async function handleRegisterSubmit(e) {
+        e.preventDefault();
+        const registerData = {
+            email: elements.regEmail.value.trim(),
+            password: elements.regPassword.value,
+            role: 'customer',
+            name: elements.regName.value.trim(),
+            phone: elements.regPhone.value.trim(),
+            address: elements.regAddress.value.trim()
+        };
+
+        const res = await db.register(registerData);
+        if (res.success) {
+            showToast(`Account created successfully! Welcome, ${res.user.name}.`, "success");
+            toggleAuthModal(false);
+            await initAuth();
+        } else {
+            showToast(res.error, "error");
+        }
+    }
 
     // --- Geolocation UI Sync ---
     async function updateLocationUI() {
@@ -1583,16 +1666,63 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // Auth event listeners
+    elements.btnAuthTrigger.addEventListener('click', async () => {
+        if (db.token) {
+            db.logout();
+            showToast("Logged out successfully.");
+            await initAuth();
+            if (currentView === 'checkout') {
+                await switchView('landing');
+            }
+        } else {
+            toggleAuthModal(true);
+        }
+    });
+
+    elements.btnCloseAuthModal.addEventListener('click', () => toggleAuthModal(false));
+
+    elements.linkToRegister.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.formCustomerLogin.style.display = 'none';
+        elements.formCustomerRegister.style.display = 'flex';
+        document.getElementById('auth-modal-title').innerText = "Create Luxe Profile";
+        document.getElementById('auth-modal-subtitle').innerText = "Register for secure, direct hyperlocal deliveries";
+    });
+
+    elements.linkToLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.formCustomerLogin.style.display = 'flex';
+        elements.formCustomerRegister.style.display = 'none';
+        document.getElementById('auth-modal-title').innerText = "Welcome to LuxeGrocer";
+        document.getElementById('auth-modal-subtitle').innerText = "Sign in to access premium local catalog shelves";
+    });
+
+    elements.formCustomerLogin.addEventListener('submit', handleLoginSubmit);
+    elements.formCustomerRegister.addEventListener('submit', handleRegisterSubmit);
+
     elements.btnCartCheckout.addEventListener('click', async () => {
         elements.cartOverlayElement.classList.remove('active');
         elements.cartDrawerElement.classList.remove('active');
         
-        const orders = await db.getOrders();
-        if (orders.length > 0) {
-            const lastOrder = orders[orders.length - 1];
-            elements.checkoutName.value = lastOrder.customer.name;
-            elements.checkoutPhone.value = lastOrder.customer.phone;
-            elements.checkoutAddress.value = lastOrder.customer.address;
+        if (!db.token) {
+            showToast("Please sign in or register to place an order.", "info");
+            toggleAuthModal(true);
+            return;
+        }
+
+        if (db.currentUser) {
+            elements.checkoutName.value = db.currentUser.name || '';
+            elements.checkoutPhone.value = db.currentUser.phone || '';
+            elements.checkoutAddress.value = db.currentUser.address || '';
+        } else {
+            const orders = await db.getOrders();
+            if (orders.length > 0) {
+                const lastOrder = orders[orders.length - 1];
+                elements.checkoutName.value = lastOrder.customer.name;
+                elements.checkoutPhone.value = lastOrder.customer.phone;
+                elements.checkoutAddress.value = lastOrder.customer.address;
+            }
         }
 
         await switchView('checkout');
@@ -1647,6 +1777,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Bootstrapping ---
     db.initDatabase();
     loadCartFromStorage();
+    initAuth();
     updateLocationUI().then(() => {
         switchView('landing');
     });

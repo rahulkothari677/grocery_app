@@ -3,9 +3,12 @@ const express = require('express');
 const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
+const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
+const JWT_SECRET = 'luxegrocer-super-secret-jwt-key-2026';
 
 // Enable CORS and raw body/json parsing
 app.use(cors());
@@ -37,6 +40,7 @@ const SEED_STORES = [
         minOrderValue: 150,
         lat: 12.9141,
         lng: 77.6358,
+        ownerEmail: 'dairy@luxe.com',
         products: [
             { id: 'p1-1', name: 'Premium Full Cream Milk', category: 'dairy', price: 68.00, originalPrice: 75.00, badgeText: 'Bestseller', unit: '1 Liter', stock: 50, desc: 'Fresh farm-sourced pasteurized whole milk, rich in cream.', rating: 4.8, image: 'assets/prod_milk.png' },
             { id: 'p1-2', name: 'Organic Greek Yogurt', category: 'dairy', price: 120.00, originalPrice: 140.00, badgeText: 'Popular', unit: '400g', stock: 25, desc: 'Thick, creamy yogurt made from organic dairy culture.', rating: 4.9, image: 'assets/prod_yogurt.png' },
@@ -57,6 +61,7 @@ const SEED_STORES = [
         minOrderValue: 200,
         lat: 12.9279,
         lng: 77.6271,
+        ownerEmail: 'organic@luxe.com',
         products: [
             { id: 'p2-1', name: 'Organic Royal Gala Apples', category: 'fruits', price: 280.00, originalPrice: 320.00, badgeText: 'Organic', unit: '1 kg', stock: 15, desc: 'Crisp, sweet, and directly imported from organic orchards.', rating: 4.9, image: 'assets/prod_apples.png' },
             { id: 'p2-2', name: 'Fresh Alphonso Mangoes', category: 'fruits', price: 450.00, originalPrice: 550.00, badgeText: 'Season Special', unit: '1 Dozen', stock: 8, desc: 'Handpicked premium export-quality sweet mangoes.', rating: 5.0, image: 'assets/prod_mangoes.png' }
@@ -75,6 +80,7 @@ const SEED_STORES = [
         minOrderValue: 0,
         lat: 12.9719,
         lng: 77.6412,
+        ownerEmail: 'artisan@luxe.com',
         products: [
             { id: 'p3-1', name: 'Sourdough Country Loaf', category: 'bakery', price: 160.00, originalPrice: 190.00, badgeText: 'Artisan', unit: '450g', stock: 10, desc: 'Wild yeast fermented sourdough bread with a crispy crust and chewy center.', rating: 4.9, image: 'assets/prod_sourdough.png' },
             { id: 'p3-2', name: 'All-Butter French Croissants', category: 'bakery', price: 180.00, originalPrice: 210.00, badgeText: 'Baked Daily', unit: '2 Units', stock: 12, desc: 'Flaky, laminated layers of pure butter pastry, baked daily.', rating: 4.8, image: 'assets/prod_croissants.png' },
@@ -83,19 +89,91 @@ const SEED_STORES = [
     }
 ];
 
+// --- Database Seeding Helper ---
+function seedDefaultUsers(dbData) {
+    if (!dbData.users) {
+        dbData.users = [];
+    }
+    const defaultPasswordHash = bcrypt.hashSync('admin123', 10);
+    const defaultMerchants = [
+        {
+            id: 'user-dairy',
+            email: 'dairy@luxe.com',
+            password: defaultPasswordHash,
+            role: 'merchant',
+            name: 'Dairy Boutique Manager',
+            storeId: 'store-1'
+        },
+        {
+            id: 'user-organic',
+            email: 'organic@luxe.com',
+            password: defaultPasswordHash,
+            role: 'merchant',
+            name: 'Organic Harvest Manager',
+            storeId: 'store-2'
+        },
+        {
+            id: 'user-artisan',
+            email: 'artisan@luxe.com',
+            password: defaultPasswordHash,
+            role: 'merchant',
+            name: 'Artisan Bakery Manager',
+            storeId: 'store-3'
+        }
+    ];
+
+    defaultMerchants.forEach(m => {
+        const exists = dbData.users.some(u => u.email === m.email);
+        if (!exists) {
+            dbData.users.push(m);
+        }
+    });
+
+    dbData.stores.forEach(store => {
+        if (store.id === 'store-1' && !store.ownerEmail) {
+            store.ownerEmail = 'dairy@luxe.com';
+        } else if (store.id === 'store-2' && !store.ownerEmail) {
+            store.ownerEmail = 'organic@luxe.com';
+        } else if (store.id === 'store-3' && !store.ownerEmail) {
+            store.ownerEmail = 'artisan@luxe.com';
+        }
+    });
+}
+
 // --- Database Read/Write Helpers ---
 function readDb() {
     try {
+        let dbData;
         if (!fs.existsSync(DB_PATH)) {
-            const initialData = { stores: SEED_STORES, orders: [] };
-            fs.writeFileSync(DB_PATH, JSON.stringify(initialData, null, 2));
-            return initialData;
+            dbData = { stores: SEED_STORES, orders: [], users: [] };
+            seedDefaultUsers(dbData);
+            fs.writeFileSync(DB_PATH, JSON.stringify(dbData, null, 2));
+            return dbData;
         }
         const raw = fs.readFileSync(DB_PATH, 'utf8');
-        return JSON.parse(raw);
+        dbData = JSON.parse(raw);
+        
+        let changed = false;
+        if (!dbData.users) {
+            dbData.users = [];
+            changed = true;
+        }
+        if (!dbData.orders) {
+            dbData.orders = [];
+            changed = true;
+        }
+        const hasDairyMerchant = dbData.users.some(u => u.email === 'dairy@luxe.com');
+        if (!hasDairyMerchant) {
+            seedDefaultUsers(dbData);
+            changed = true;
+        }
+        if (changed) {
+            fs.writeFileSync(DB_PATH, JSON.stringify(dbData, null, 2));
+        }
+        return dbData;
     } catch (err) {
         console.error("Database read failure:", err);
-        return { stores: [], orders: [] };
+        return { stores: [], orders: [], users: [] };
     }
 }
 
@@ -161,6 +239,195 @@ function broadcastSync(event, data) {
 
 // --- API ENDPOINTS ---
 
+// --- Auth Middlewares ---
+function verifyToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    if (!authHeader) {
+        return res.status(401).json({ error: 'No token provided' });
+    }
+    const token = authHeader.split(' ')[1];
+    if (!token) {
+        return res.status(401).json({ error: 'Token formatting error' });
+    }
+    jwt.verify(token, JWT_SECRET, (err, decoded) => {
+        if (err) {
+            return res.status(403).json({ error: 'Failed to authenticate token' });
+        }
+        req.user = decoded;
+        next();
+    });
+}
+
+function verifyStoreOwner(req, res, next) {
+    const storeId = req.params.id;
+    const dbData = readDb();
+    const store = dbData.stores.find(s => s.id === storeId);
+    if (!store) {
+        return res.status(404).json({ error: 'Store not found' });
+    }
+    if (req.user.role !== 'merchant' || store.ownerEmail !== req.user.email) {
+        return res.status(403).json({ error: 'Forbidden: You do not own this store' });
+    }
+    req.store = store;
+    next();
+}
+
+function verifyOrderStoreOwner(req, res, next) {
+    const orderId = req.params.id;
+    const dbData = readDb();
+    const order = dbData.orders.find(o => o.id === orderId);
+    if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+    }
+    const store = dbData.stores.find(s => s.id === order.storeId);
+    if (!store || req.user.role !== 'merchant' || store.ownerEmail !== req.user.email) {
+        return res.status(403).json({ error: 'Forbidden: You do not own the store for this order' });
+    }
+    req.order = order;
+    next();
+}
+
+// --- AUTH ROUTES ---
+
+// POST: Register a user (customer or merchant)
+app.post('/api/auth/register', (req, res) => {
+    const dbData = readDb();
+    const { email, password, role, name, phone, address, storeName } = req.body;
+    
+    if (!email || !password || !role || !name) {
+        return res.status(400).json({ error: 'Email, password, role, and name are required' });
+    }
+    
+    const emailLower = email.toLowerCase().trim();
+    if (dbData.users.some(u => u.email.toLowerCase() === emailLower)) {
+        return res.status(400).json({ error: 'User with this email already exists' });
+    }
+    
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const userId = 'user-' + Date.now();
+    
+    const newUser = {
+        id: userId,
+        email: emailLower,
+        password: hashedPassword,
+        role: role,
+        name: name,
+        phone: phone || '',
+        address: address || ''
+    };
+    
+    if (role === 'merchant') {
+        const storeId = 'store-' + Date.now();
+        const newStore = {
+            id: storeId,
+            name: storeName || `${name}'s Luxe Shop`,
+            category: 'General Grocery',
+            rating: 5.0,
+            reviewsCount: 0,
+            image: '',
+            address: address || '',
+            phone: phone || '',
+            deliveryRadius: 5.0,
+            minOrderValue: 0,
+            lat: 12.9250,
+            lng: 77.6220,
+            ownerEmail: emailLower,
+            products: []
+        };
+        dbData.stores.push(newStore);
+        newUser.storeId = storeId;
+    }
+    
+    dbData.users.push(newUser);
+    writeDb(dbData);
+    
+    const tokenPayload = {
+        id: newUser.id,
+        email: newUser.email,
+        role: newUser.role,
+        name: newUser.name,
+        storeId: newUser.storeId || null
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+    
+    res.status(201).json({
+        token,
+        user: tokenPayload
+    });
+});
+
+// POST: Login user
+app.post('/api/auth/login', (req, res) => {
+    const dbData = readDb();
+    const { email, password } = req.body;
+    
+    if (!email || !password) {
+        return res.status(400).json({ error: 'Email and password are required' });
+    }
+    
+    const emailLower = email.toLowerCase().trim();
+    const user = dbData.users.find(u => u.email.toLowerCase() === emailLower);
+    if (!user) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    const valid = bcrypt.compareSync(password, user.password);
+    if (!valid) {
+        return res.status(401).json({ error: 'Invalid email or password' });
+    }
+    
+    if (user.role === 'merchant' && !user.storeId) {
+        const store = dbData.stores.find(s => s.ownerEmail === emailLower);
+        if (store) {
+            user.storeId = store.id;
+            writeDb(dbData);
+        }
+    }
+    
+    const tokenPayload = {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        storeId: user.storeId || null
+    };
+    const token = jwt.sign(tokenPayload, JWT_SECRET, { expiresIn: '7d' });
+    
+    res.json({
+        token,
+        user: tokenPayload
+    });
+});
+
+// GET: Current logged in user info
+app.get('/api/auth/me', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.id === req.user.id);
+    if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    
+    let storeId = user.storeId || null;
+    if (user.role === 'merchant' && !storeId) {
+        const store = dbData.stores.find(s => s.ownerEmail === user.email);
+        if (store) {
+            storeId = store.id;
+            user.storeId = storeId;
+            writeDb(dbData);
+        }
+    }
+    
+    res.json({
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        name: user.name,
+        phone: user.phone || '',
+        address: user.address || '',
+        storeId: storeId
+    });
+});
+
 // GET: All stores
 app.get('/api/stores', (req, res) => {
     const db = readDb();
@@ -176,15 +443,23 @@ app.get('/api/stores/:id', (req, res) => {
 });
 
 // POST: Register a new store
-app.post('/api/stores', (req, res) => {
+app.post('/api/stores', verifyToken, (req, res) => {
+    if (req.user.role !== 'merchant') {
+        return res.status(403).json({ error: 'Only merchants can register stores' });
+    }
     const dbData = readDb();
-    const storeData = req.body;
     
-    // Save banner image if base64
+    // Check if this merchant already owns a store
+    if (dbData.stores.some(s => s.ownerEmail === req.user.email)) {
+        return res.status(400).json({ error: 'You already own a store' });
+    }
+    
+    const storeData = req.body;
     const bannerUrl = saveBase64Image(req, storeData.image, 'store-banner');
     
+    const storeId = 'store-' + Date.now();
     const newStore = {
-        id: 'store-' + Date.now(),
+        id: storeId,
         name: storeData.name,
         category: storeData.category || 'General Grocery',
         rating: 5.0,
@@ -196,8 +471,15 @@ app.post('/api/stores', (req, res) => {
         minOrderValue: parseFloat(storeData.minOrderValue) || 0,
         lat: storeData.lat || 12.9250,
         lng: storeData.lng || 77.6220,
+        ownerEmail: req.user.email,
         products: []
     };
+    
+    // Update the merchant user storeId in db
+    const userIdx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (userIdx !== -1) {
+        dbData.users[userIdx].storeId = storeId;
+    }
     
     dbData.stores.push(newStore);
     writeDb(dbData);
@@ -207,10 +489,9 @@ app.post('/api/stores', (req, res) => {
 });
 
 // PUT: Update store settings config
-app.put('/api/stores/:id', (req, res) => {
+app.put('/api/stores/:id', verifyToken, verifyStoreOwner, (req, res) => {
     const dbData = readDb();
     const idx = dbData.stores.findIndex(s => s.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Store not found' });
     
     const settings = req.body;
     
@@ -235,10 +516,9 @@ app.put('/api/stores/:id', (req, res) => {
 });
 
 // POST: Add new catalog product
-app.post('/api/stores/:id/products', (req, res) => {
+app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) => {
     const dbData = readDb();
     const storeIdx = dbData.stores.findIndex(s => s.id === req.params.id);
-    if (storeIdx === -1) return res.status(404).json({ error: 'Store not found' });
     
     const prodData = req.body;
     const prodUrl = saveBase64Image(req, prodData.image, 'product');
@@ -263,11 +543,9 @@ app.post('/api/stores/:id/products', (req, res) => {
 });
 
 // PUT: Update catalog product listing
-app.put('/api/stores/:id/products/:productId', (req, res) => {
+app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (req, res) => {
     const dbData = readDb();
     const storeIdx = dbData.stores.findIndex(s => s.id === req.params.id);
-    if (storeIdx === -1) return res.status(404).json({ error: 'Store not found' });
-    
     const prodIdx = dbData.stores[storeIdx].products.findIndex(p => p.id === req.params.productId);
     if (prodIdx === -1) return res.status(404).json({ error: 'Product not found' });
     
@@ -293,10 +571,9 @@ app.put('/api/stores/:id/products/:productId', (req, res) => {
 });
 
 // DELETE: Remove product from catalog
-app.delete('/api/stores/:id/products/:productId', (req, res) => {
+app.delete('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (req, res) => {
     const dbData = readDb();
     const storeIdx = dbData.stores.findIndex(s => s.id === req.params.id);
-    if (storeIdx === -1) return res.status(404).json({ error: 'Store not found' });
     
     dbData.stores[storeIdx].products = dbData.stores[storeIdx].products.filter(p => p.id !== req.params.productId);
     writeDb(dbData);
@@ -305,14 +582,25 @@ app.delete('/api/stores/:id/products/:productId', (req, res) => {
     res.json({ success: true });
 });
 
-// GET: Fetch all orders
-app.get('/api/orders', (req, res) => {
+// GET: Fetch all orders (restricted by user role / owner status)
+app.get('/api/orders', verifyToken, (req, res) => {
     const db = readDb();
-    res.json(db.orders);
+    if (req.user.role === 'merchant') {
+        const store = db.stores.find(s => s.ownerEmail === req.user.email);
+        if (!store) return res.json([]);
+        const storeOrders = db.orders.filter(o => o.storeId === store.id);
+        res.json(storeOrders);
+    } else {
+        const customerOrders = db.orders.filter(o => o.customer && o.customer.userId === req.user.id);
+        res.json(customerOrders);
+    }
 });
 
 // POST: Place a new order
-app.post('/api/orders', (req, res) => {
+app.post('/api/orders', verifyToken, (req, res) => {
+    if (req.user.role !== 'customer') {
+        return res.status(403).json({ error: 'Only customers can place orders' });
+    }
     const dbData = readDb();
     const orderData = req.body;
     
@@ -329,7 +617,11 @@ app.post('/api/orders', (req, res) => {
         items: orderData.items,
         subtotal: orderData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
         deliveryFee: parseFloat(orderData.deliveryFee) || 0,
-        customer: orderData.customer,
+        customer: {
+            ...orderData.customer,
+            userId: req.user.id,
+            email: req.user.email
+        },
         status: 'Pending',
         deliveryOtp: deliveryOtp,
         timestamp: new Date().toISOString(),
@@ -354,10 +646,9 @@ app.post('/api/orders', (req, res) => {
 });
 
 // PUT: Advance/Update order status manually
-app.put('/api/orders/:id/status', (req, res) => {
+app.put('/api/orders/:id/status', verifyToken, verifyOrderStoreOwner, (req, res) => {
     const dbData = readDb();
     const idx = dbData.orders.findIndex(o => o.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Order not found' });
     
     const { status, description } = req.body;
     dbData.orders[idx].status = status;
@@ -373,10 +664,9 @@ app.put('/api/orders/:id/status', (req, res) => {
 });
 
 // POST: Verify doorstep OTP and mark delivered
-app.post('/api/orders/:id/verify-otp', (req, res) => {
+app.post('/api/orders/:id/verify-otp', verifyToken, verifyOrderStoreOwner, (req, res) => {
     const dbData = readDb();
     const idx = dbData.orders.findIndex(o => o.id === req.params.id);
-    if (idx === -1) return res.status(404).json({ error: 'Order not found' });
     
     const { otp } = req.body;
     const order = dbData.orders[idx];

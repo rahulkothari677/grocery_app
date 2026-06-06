@@ -18,6 +18,8 @@ const USER_LOCATION = {
 class LuxeStore {
     constructor() {
         this.baseUrl = 'http://localhost:5000/api';
+        this.token = localStorage.getItem('luxegrocer_auth_token') || null;
+        this.currentUser = null;
         this.initDatabase();
     }
 
@@ -25,6 +27,82 @@ class LuxeStore {
         if (!localStorage.getItem('luxegrocer_user_location')) {
             localStorage.setItem('luxegrocer_user_location', JSON.stringify(USER_LOCATION));
         }
+    }
+
+    // --- Authentication Methods ---
+    getHeaders() {
+        const headers = { 'Content-Type': 'application/json' };
+        if (this.token) {
+            headers['Authorization'] = `Bearer ${this.token}`;
+        }
+        return headers;
+    }
+
+    async register(registerData) {
+        try {
+            const res = await fetch(`${this.baseUrl}/auth/register`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(registerData)
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                return { success: false, error: data.error || 'Registration failed' };
+            }
+            this.token = data.token;
+            localStorage.setItem('luxegrocer_auth_token', data.token);
+            this.currentUser = data.user;
+            return { success: true, user: data.user };
+        } catch (err) {
+            console.error("API error during register:", err);
+            return { success: false, error: 'Network connection failed' };
+        }
+    }
+
+    async login(email, password) {
+        try {
+            const res = await fetch(`${this.baseUrl}/auth/login`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, password })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                return { success: false, error: data.error || 'Login failed' };
+            }
+            this.token = data.token;
+            localStorage.setItem('luxegrocer_auth_token', data.token);
+            this.currentUser = data.user;
+            return { success: true, user: data.user };
+        } catch (err) {
+            console.error("API error during login:", err);
+            return { success: false, error: 'Network connection failed' };
+        }
+    }
+
+    async loadCurrentUser() {
+        if (!this.token) return null;
+        try {
+            const res = await fetch(`${this.baseUrl}/auth/me`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) {
+                this.currentUser = await res.json();
+                return this.currentUser;
+            } else {
+                this.logout();
+                return null;
+            }
+        } catch (err) {
+            console.error("API error loading current user:", err);
+            return null;
+        }
+    }
+
+    logout() {
+        this.token = null;
+        this.currentUser = null;
+        localStorage.removeItem('luxegrocer_auth_token');
     }
 
     // --- User Location Methods (Kept local to browser session) ---
@@ -107,7 +185,7 @@ class LuxeStore {
             
             const res = await fetch(`${this.baseUrl}/stores`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify(payload)
             });
             return await res.json();
@@ -122,7 +200,7 @@ class LuxeStore {
         try {
             const res = await fetch(`${this.baseUrl}/stores/${storeId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify(configData)
             });
             return await res.json();
@@ -137,7 +215,7 @@ class LuxeStore {
         try {
             const res = await fetch(`${this.baseUrl}/stores/${storeId}/products`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify(productData)
             });
             return await res.json();
@@ -151,7 +229,7 @@ class LuxeStore {
         try {
             const res = await fetch(`${this.baseUrl}/stores/${storeId}/products/${productId}`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify(updatedData)
             });
             return res.ok;
@@ -164,7 +242,8 @@ class LuxeStore {
     async deleteProduct(storeId, productId) {
         try {
             const res = await fetch(`${this.baseUrl}/stores/${storeId}/products/${productId}`, {
-                method: 'DELETE'
+                method: 'DELETE',
+                headers: this.getHeaders()
             });
             return res.ok;
         } catch (err) {
@@ -209,7 +288,9 @@ class LuxeStore {
     // --- Orders API Helpers ---
     async getOrders() {
         try {
-            const res = await fetch(`${this.baseUrl}/orders`);
+            const res = await fetch(`${this.baseUrl}/orders`, {
+                headers: this.getHeaders()
+            });
             return await res.json();
         } catch (err) {
             console.error("API error fetching orders:", err);
@@ -236,7 +317,7 @@ class LuxeStore {
             
             const res = await fetch(`${this.baseUrl}/orders`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify(payload)
             });
             return await res.json();
@@ -250,7 +331,7 @@ class LuxeStore {
         try {
             const res = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
                 method: 'PUT',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify({ status: newStatus, description })
             });
             return res.ok;
@@ -264,7 +345,7 @@ class LuxeStore {
         try {
             const res = await fetch(`${this.baseUrl}/orders/${orderId}/verify-otp`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: this.getHeaders(),
                 body: JSON.stringify({ otp: enteredOtp })
             });
             

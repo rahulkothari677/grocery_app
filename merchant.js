@@ -2,7 +2,7 @@
 
 document.addEventListener('DOMContentLoaded', () => {
     // --- Application State ---
-    let ownedStoreId = localStorage.getItem('luxegrocer_owned_store_id') || null;
+    let ownedStoreId = null;
     let activeOwnerPane = 'analytics'; // Default pane
 
     // Custom uploads temporary Base64 states
@@ -82,7 +82,23 @@ document.addEventListener('DOMContentLoaded', () => {
         // Toast
         toastNotification: document.getElementById('toast-notification'),
         toastIcon: document.getElementById('toast-icon'),
-        toastMessage: document.getElementById('toast-message')
+        toastMessage: document.getElementById('toast-message'),
+
+        // Merchant Auth
+        merchantAuthWorkspace: document.getElementById('merchant-auth-workspace'),
+        formMerchantLogin: document.getElementById('form-merchant-login'),
+        formMerchantRegister: document.getElementById('form-merchant-register'),
+        merchantLoginEmail: document.getElementById('merchant-login-email'),
+        merchantLoginPassword: document.getElementById('merchant-login-password'),
+        merchantRegName: document.getElementById('merchant-reg-name'),
+        merchantRegEmail: document.getElementById('merchant-reg-email'),
+        merchantRegPassword: document.getElementById('merchant-reg-password'),
+        merchantRegStoreName: document.getElementById('merchant-reg-store-name'),
+        merchantRegPhone: document.getElementById('merchant-reg-phone'),
+        merchantRegAddress: document.getElementById('merchant-reg-address'),
+        linkMerchantToRegister: document.getElementById('link-merchant-to-register'),
+        linkMerchantToLogin: document.getElementById('link-merchant-to-login'),
+        btnMerchantLogout: document.getElementById('btn-merchant-logout')
     };
 
     // --- Toast Notifications ---
@@ -191,17 +207,76 @@ document.addEventListener('DOMContentLoaded', () => {
         reader.readAsDataURL(file);
     }
 
+    // --- Merchant Authentication Handlers ---
+    async function handleMerchantLogin(e) {
+        e.preventDefault();
+        const email = elements.merchantLoginEmail.value.trim();
+        const password = elements.merchantLoginPassword.value;
+        
+        const res = await db.login(email, password);
+        if (res.success) {
+            if (res.user.role !== 'merchant') {
+                db.logout();
+                showToast("Only merchant accounts can log in here.", "error");
+                return;
+            }
+            showToast(`Welcome back, ${res.user.name}!`, "success");
+            elements.formMerchantLogin.reset();
+            await loadOwnerPortal();
+        } else {
+            showToast(res.error, "error");
+        }
+    }
+
+    async function handleMerchantRegister(e) {
+        e.preventDefault();
+        const registerData = {
+            email: elements.merchantRegEmail.value.trim(),
+            password: elements.merchantRegPassword.value,
+            role: 'merchant',
+            name: elements.merchantRegName.value.trim(),
+            storeName: elements.merchantRegStoreName.value.trim(),
+            phone: elements.merchantRegPhone.value.trim(),
+            address: elements.merchantRegAddress.value.trim()
+        };
+        
+        const res = await db.register(registerData);
+        if (res.success) {
+            showToast(`Merchant profile and store initialized successfully!`, "success");
+            elements.formMerchantRegister.reset();
+            await loadOwnerPortal();
+        } else {
+            showToast(res.error, "error");
+        }
+    }
+
     // --- Merchant View Controller ---
     async function loadOwnerPortal() {
+        const user = await db.loadCurrentUser();
+        
+        if (!user || user.role !== 'merchant') {
+            elements.merchantAuthWorkspace.style.display = 'block';
+            elements.ownerNoStoreAlert.style.display = 'none';
+            elements.ownerDashboardWorkspace.style.display = 'none';
+            elements.btnMerchantLogout.style.display = 'none';
+            return;
+        }
+        
+        elements.merchantAuthWorkspace.style.display = 'none';
+        elements.btnMerchantLogout.style.display = 'inline-flex';
+        elements.btnMerchantLogout.innerText = `Sign Out (${user.name.split(' ')[0]})`;
+        
+        ownedStoreId = user.storeId || null;
+        
         if (!ownedStoreId) {
             elements.ownerNoStoreAlert.style.display = 'block';
             elements.ownerDashboardWorkspace.style.display = 'none';
         } else {
             const store = await db.getStoreById(ownedStoreId);
             if (!store) {
-                localStorage.removeItem('luxegrocer_owned_store_id');
                 ownedStoreId = null;
-                await loadOwnerPortal();
+                elements.ownerNoStoreAlert.style.display = 'block';
+                elements.ownerDashboardWorkspace.style.display = 'none';
                 return;
             }
 
@@ -549,7 +624,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const newStore = await db.registerStore(storeData);
         if (newStore) {
             ownedStoreId = newStore.id;
-            localStorage.setItem('luxegrocer_owned_store_id', newStore.id);
+            await db.loadCurrentUser(); // Refresh local profile storeId mapping
             elements.modalRegisterStoreElement.classList.remove('active');
             elements.registerStoreForm.reset();
             regStoreCustomBannerBase64 = null;
@@ -676,6 +751,31 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Event Listeners ---
+    elements.linkMerchantToRegister.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.formMerchantLogin.style.display = 'none';
+        elements.formMerchantRegister.style.display = 'flex';
+        document.getElementById('merchant-auth-title').innerText = "Register Partner";
+        document.getElementById('merchant-auth-subtitle').innerText = "Register your merchant profile and launch your shelf";
+    });
+
+    elements.linkMerchantToLogin.addEventListener('click', (e) => {
+        e.preventDefault();
+        elements.formMerchantLogin.style.display = 'flex';
+        elements.formMerchantRegister.style.display = 'none';
+        document.getElementById('merchant-auth-title').innerText = "Partner Portal";
+        document.getElementById('merchant-auth-subtitle').innerText = "Access your digital shelf manager & deliveries console";
+    });
+
+    elements.formMerchantLogin.addEventListener('submit', handleMerchantLogin);
+    elements.formMerchantRegister.addEventListener('submit', handleMerchantRegister);
+    
+    elements.btnMerchantLogout.addEventListener('click', async () => {
+        db.logout();
+        showToast("Logged out successfully.");
+        await loadOwnerPortal();
+    });
+
     elements.btnOpenRegisterModal.addEventListener('click', () => {
         elements.modalRegisterStoreElement.classList.add('active');
     });

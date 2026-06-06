@@ -661,7 +661,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 acceptForm.addEventListener('submit', async (e) => {
                     e.preventDefault();
                     const prepTime = acceptForm.querySelector('.prep-time-select').value;
-                    await db.updateOrderStatus(order.id, 'Preparing', `Store owner accepted and is packaging your items. Estimated preparation: ${prepTime}.`);
+                    const prepMinutes = parseInt(prepTime) || 15;
+                    await db.updateOrderStatus(order.id, 'Preparing', `Store owner accepted and is packaging your items. Estimated preparation: ${prepTime}.`, { prepTimeMinutes: prepMinutes });
                     showToast(`Order accepted. Prep time set to ${prepTime}.`);
                     playSoundbox(`New order accepted. Estimated preparation time ${prepTime}.`);
                     await renderOwnerOrders();

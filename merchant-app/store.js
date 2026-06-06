@@ -334,12 +334,12 @@ class LuxeStore {
         }
     }
 
-    async updateOrderStatus(orderId, newStatus, description = '') {
+    async updateOrderStatus(orderId, newStatus, description = '', extraParams = {}) {
         try {
             const res = await fetch(`${this.baseUrl}/orders/${orderId}/status`, {
                 method: 'PUT',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ status: newStatus, description })
+                body: JSON.stringify({ status: newStatus, description, ...extraParams })
             });
             return res.ok;
         } catch (err) {

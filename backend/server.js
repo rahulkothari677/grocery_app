@@ -894,9 +894,16 @@ app.post('/api/orders', verifyToken, (req, res) => {
 app.put('/api/orders/:id/status', verifyToken, verifyOrderStatusUpdater, (req, res) => {
     const dbData = readDb();
     const idx = dbData.orders.findIndex(o => o.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Order not found' });
     
-    const { status, description } = req.body;
+    const { status, description, prepTimeMinutes } = req.body;
     dbData.orders[idx].status = status;
+    
+    if (status === 'Preparing') {
+        dbData.orders[idx].prepTimeMinutes = parseInt(prepTimeMinutes) || 15;
+        dbData.orders[idx].acceptedAt = new Date().toISOString();
+    }
+    
     dbData.orders[idx].statusTimeline.push({
         status,
         time: new Date().toISOString(),
@@ -1014,6 +1021,102 @@ app.post('/api/vouchers/validate', verifyToken, (req, res) => {
         }
     });
 });
+
+// --- Background Expiry & Stock Refund Daemon ---
+setInterval(() => {
+    const dbData = readDb();
+    let changed = false;
+    const now = new Date();
+
+    dbData.orders.forEach(order => {
+        // Only process active orders
+        if (order.status !== 'Delivered' && order.status !== 'Cancelled') {
+            
+            // Rule 1: Exceeded assigned preparation time + 30 minutes grace window
+            if (order.acceptedAt && order.prepTimeMinutes !== undefined) {
+                const acceptedTime = new Date(order.acceptedAt);
+                const deadlineTime = new Date(acceptedTime.getTime() + (order.prepTimeMinutes + 30) * 60 * 1000);
+                
+                if (now > deadlineTime) {
+                    console.log(`[AUTO-CANCEL] Order #${order.id} delivery deadline exceeded. Auto-cancelling...`);
+                    order.status = 'Cancelled';
+                    order.statusTimeline.push({
+                        status: 'Cancelled',
+                        time: now.toISOString(),
+                        desc: `Order automatically cancelled as delivery exceeded assigned time (${order.prepTimeMinutes} mins) + 30 mins grace window. Refund of ₹${(order.subtotal + order.deliveryFee - order.discount).toFixed(2)} processed.`
+                    });
+                    
+                    // Restock inventory levels
+                    order.items.forEach(cartItem => {
+                        const store = dbData.stores.find(s => s.id === order.storeId);
+                        if (store) {
+                            const product = store.products.find(p => p.id === cartItem.id);
+                            if (product) {
+                                if (cartItem.variantId && product.variants && product.variants.length > 0) {
+                                    const variant = product.variants.find(v => v.id === cartItem.variantId);
+                                    if (variant) {
+                                        variant.stock += cartItem.quantity;
+                                        console.log(`  Restocked variant ${variant.name} of ${product.name} by ${cartItem.quantity} units.`);
+                                    }
+                                } else {
+                                    product.stock += cartItem.quantity;
+                                    console.log(`  Restocked product ${product.name} by ${cartItem.quantity} units.`);
+                                }
+                            }
+                        }
+                    });
+                    
+                    changed = true;
+                    broadcastSync('orders_updated', order.id);
+                }
+            }
+            
+            // Rule 2: Pending timeout - remained in Pending status for > 30 minutes without acceptance
+            if (order.status === 'Pending') {
+                const placedTime = new Date(order.timestamp);
+                const pendingDeadline = new Date(placedTime.getTime() + 30 * 60 * 1000);
+                
+                if (now > pendingDeadline) {
+                    console.log(`[AUTO-CANCEL] Order #${order.id} remained Pending too long. Auto-cancelling...`);
+                    order.status = 'Cancelled';
+                    order.statusTimeline.push({
+                        status: 'Cancelled',
+                        time: now.toISOString(),
+                        desc: `Order automatically cancelled as store did not accept within 30 minutes. Refund processed.`
+                    });
+                    
+                    // Restock inventory levels
+                    order.items.forEach(cartItem => {
+                        const store = dbData.stores.find(s => s.id === order.storeId);
+                        if (store) {
+                            const product = store.products.find(p => p.id === cartItem.id);
+                            if (product) {
+                                if (cartItem.variantId && product.variants && product.variants.length > 0) {
+                                    const variant = product.variants.find(v => v.id === cartItem.variantId);
+                                    if (variant) {
+                                        variant.stock += cartItem.quantity;
+                                        console.log(`  Restocked variant ${variant.name} of ${product.name} by ${cartItem.quantity} units.`);
+                                    }
+                                } else {
+                                    product.stock += cartItem.quantity;
+                                    console.log(`  Restocked product ${product.name} by ${cartItem.quantity} units.`);
+                                }
+                            }
+                        }
+                    });
+                    
+                    changed = true;
+                    broadcastSync('orders_updated', order.id);
+                }
+            }
+        }
+    });
+
+    if (changed) {
+        writeDb(dbData);
+    }
+}, 10000);
+
 app.listen(PORT, () => {
     console.log(`LuxeGrocer API Backend active on http://localhost:${PORT}`);
 });

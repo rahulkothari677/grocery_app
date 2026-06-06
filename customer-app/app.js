@@ -1,5 +1,28 @@
 // app.js - LuxeGrocer Consumer-Centric Client-Side Controller
 
+window.addEventListener('error', (event) => {
+    const errDiv = document.createElement('div');
+    errDiv.style.position = 'fixed';
+    errDiv.style.top = '0';
+    errDiv.style.left = '0';
+    errDiv.style.width = '100%';
+    errDiv.style.background = '#ef4444';
+    errDiv.style.color = 'white';
+    errDiv.style.padding = '15px';
+    errDiv.style.zIndex = '99999';
+    errDiv.style.fontSize = '0.9rem';
+    errDiv.style.fontFamily = 'monospace';
+    errDiv.style.boxShadow = '0 4px 6px rgba(0,0,0,0.1)';
+    errDiv.innerHTML = `<strong>JS Error:</strong> ${event.message} <br> <strong>File:</strong> ${event.filename}:${event.lineno}:${event.colno}`;
+    if (document.body) {
+        document.body.appendChild(errDiv);
+    } else {
+        window.addEventListener('DOMContentLoaded', () => {
+            document.body.appendChild(errDiv);
+        });
+    }
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Application State ---
     let currentView = 'landing';
@@ -10,11 +33,16 @@ document.addEventListener('DOMContentLoaded', () => {
     let trackingTimer = null;
     let driverProgress = 0;
     let scratchCardClaimed = false;
+    let lastDeliveredOrder = null;
 
     // Grace cancellation timer state
     let cancelGraceTimer = null;
     let cancelSecondsLeft = 60;
     let selectedTipAmount = 0;
+    let activeAccountTab = 'profile';
+    let appliedVoucher = null;
+    let filterOpenOnly = false;
+    let storeSortBy = 'distance';
 
     // --- DOM Elements Cache ---
     const elements = {
@@ -155,18 +183,114 @@ document.addEventListener('DOMContentLoaded', () => {
         regAddress: document.getElementById('reg-address'),
         linkToRegister: document.getElementById('link-to-register'),
         linkToLogin: document.getElementById('link-to-login'),
-        btnTrackActiveOrder: document.getElementById('btn-track-active-order')
+        btnTrackActiveOrder: document.getElementById('btn-track-active-order'),
+        
+        // Password Recovery
+        linkForgotPassword: document.getElementById('link-forgot-password'),
+        modalForgotPassword: document.getElementById('modal-forgot-password'),
+        btnCloseForgotModal: document.getElementById('btn-close-forgot-modal'),
+        formForgotRequest: document.getElementById('form-forgot-request'),
+        formForgotReset: document.getElementById('form-forgot-reset'),
+        forgotEmail: document.getElementById('forgot-email'),
+        forgotOtp: document.getElementById('forgot-otp'),
+        forgotNewPassword: document.getElementById('forgot-new-password'),
+
+        // Profile Password Change
+        formChangePassword: document.getElementById('form-change-password'),
+        changePwdOld: document.getElementById('change-pwd-old'),
+        changePwdNew: document.getElementById('change-pwd-new'),
+        changePwdConfirm: document.getElementById('change-pwd-confirm'),
+
+        // Account Drawer elements
+        accountOverlayElement: document.getElementById('account-overlay-element'),
+        accountDrawerElement: document.getElementById('account-drawer-element'),
+        btnCloseAccount: document.getElementById('btn-close-account'),
+        btnAccountTrigger: document.getElementById('btn-account-trigger'),
+        accountTriggerText: document.getElementById('account-trigger-text'),
+        btnAccountLogout: document.getElementById('btn-account-logout'),
+
+        // Account tab buttons
+        tabBtnProfile: document.getElementById('tab-btn-profile'),
+        tabBtnAddresses: document.getElementById('tab-btn-addresses'),
+        tabBtnHistory: document.getElementById('tab-btn-history'),
+        tabBtnVouchers: document.getElementById('tab-btn-vouchers'),
+
+        // Account tab panes
+        paneAccountProfile: document.getElementById('pane-account-profile'),
+        paneAccountAddresses: document.getElementById('pane-account-addresses'),
+        paneAccountHistory: document.getElementById('pane-account-history'),
+        paneAccountVouchers: document.getElementById('pane-account-vouchers'),
+
+        // Profile Form
+        formAccountProfile: document.getElementById('form-account-profile'),
+        accountProfileName: document.getElementById('account-profile-name'),
+        accountProfilePhone: document.getElementById('account-profile-phone'),
+        accountProfileEmail: document.getElementById('account-profile-email'),
+
+        // Saved Addresses Panel
+        accountAddressList: document.getElementById('account-address-list'),
+        btnAddNewAddress: document.getElementById('btn-add-new-address'),
+        formAccountAddress: document.getElementById('form-account-address'),
+        accountAddressId: document.getElementById('account-address-id'),
+        accountAddressTag: document.getElementById('account-address-tag'),
+        accountAddressDetail: document.getElementById('account-address-detail'),
+        accountAddressLat: document.getElementById('account-address-lat'),
+        accountAddressLng: document.getElementById('account-address-lng'),
+        btnCancelAddressForm: document.getElementById('btn-cancel-address-form'),
+        btnAddrPresetH: document.getElementById('btn-addr-preset-h'),
+        btnAddrPresetK: document.getElementById('btn-addr-preset-k'),
+        btnAddrPresetI: document.getElementById('btn-addr-preset-i'),
+
+        // Order History Panel
+        accountHistoryOrders: document.getElementById('account-history-orders'),
+
+        // Vouchers Panel
+        accountVoucherList: document.getElementById('account-voucher-list'),
+
+        // Checkout Coupon / Address selector
+        checkoutAddressSelectGroup: document.getElementById('checkout-address-select-group'),
+        checkoutAddressSelect: document.getElementById('checkout-address-select'),
+        couponCodeInput: document.getElementById('coupon-code-input'),
+        btnApplyCoupon: document.getElementById('btn-apply-coupon'),
+        couponAppliedMsg: document.getElementById('coupon-applied-msg'),
+        appliedCouponCode: document.getElementById('applied-coupon-code'),
+        btnRemoveCoupon: document.getElementById('btn-remove-coupon'),
+        couponErrorMsg: document.getElementById('coupon-error-msg'),
+        checkoutDiscountRow: document.getElementById('checkout-discount-row'),
+        checkoutDiscountAmount: document.getElementById('checkout-discount-amount'),
+        favoritesCarouselContainer: document.getElementById('favorites-carousel-container'),
+        favoritesCarouselList: document.getElementById('favorites-carousel-list'),
+        btnFilterOpenOnly: document.getElementById('btn-filter-open-only'),
+        selectStoreSort: document.getElementById('select-store-sort'),
+        modalStoreReview: document.getElementById('modal-store-review'),
+        btnCloseReviewModal: document.getElementById('btn-close-review-modal'),
+        formStoreReview: document.getElementById('form-store-review'),
+        reviewStoreNameText: document.getElementById('review-store-name-text'),
+        reviewRatingValue: document.getElementById('review-rating-value'),
+        reviewComment: document.getElementById('review-comment')
     };
 
     // --- Customer Authentication Helpers ---
     async function initAuth() {
         const user = await db.loadCurrentUser();
         if (user) {
-            elements.authTriggerText.innerText = user.name.split(' ')[0];
-            elements.btnAuthTrigger.title = `Logged in as ${user.name} (${user.role})`;
+            if (elements.btnAuthTrigger) elements.btnAuthTrigger.style.display = 'none';
+            if (elements.btnAccountTrigger) {
+                elements.accountTriggerText.innerText = user.name.split(' ')[0];
+                elements.btnAccountTrigger.style.display = 'inline-flex';
+                elements.btnAccountTrigger.title = `Logged in as ${user.name}`;
+            }
             elements.checkoutName.value = user.name;
             elements.checkoutPhone.value = user.phone || '';
             elements.checkoutAddress.value = user.address || '';
+            
+            // Populate profile forms
+            elements.accountProfileName.value = user.name;
+            elements.accountProfilePhone.value = user.phone || '';
+            elements.accountProfileEmail.value = user.email;
+
+            // Load saved addresses and populate dropdown
+            await populateCheckoutAddressSelect();
 
             // Check for active orders to restore tracking screen
             try {
@@ -180,10 +304,262 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.error("Error checking active orders on login/startup:", err);
             }
         } else {
-            elements.authTriggerText.innerText = 'Sign In';
-            elements.btnAuthTrigger.title = 'Login or Register';
+            if (elements.btnAuthTrigger) {
+                elements.authTriggerText.innerText = 'Sign In';
+                elements.btnAuthTrigger.style.display = 'inline-flex';
+                elements.btnAuthTrigger.title = 'Login or Register';
+            }
+            if (elements.btnAccountTrigger) elements.btnAccountTrigger.style.display = 'none';
+            if (elements.checkoutAddressSelectGroup) elements.checkoutAddressSelectGroup.style.display = 'none';
         }
         await updateActiveOrderButtonVisibility();
+    }
+
+    function showAccountTab(tabName) {
+        // Remove active class from all tab buttons
+        elements.tabBtnProfile.classList.remove('active');
+        elements.tabBtnAddresses.classList.remove('active');
+        elements.tabBtnHistory.classList.remove('active');
+        elements.tabBtnVouchers.classList.remove('active');
+
+        // Set text colors
+        elements.tabBtnProfile.style.color = 'var(--text-muted)';
+        elements.tabBtnProfile.style.borderBottomColor = 'transparent';
+        elements.tabBtnAddresses.style.color = 'var(--text-muted)';
+        elements.tabBtnAddresses.style.borderBottomColor = 'transparent';
+        elements.tabBtnHistory.style.color = 'var(--text-muted)';
+        elements.tabBtnHistory.style.borderBottomColor = 'transparent';
+        elements.tabBtnVouchers.style.color = 'var(--text-muted)';
+        elements.tabBtnVouchers.style.borderBottomColor = 'transparent';
+
+        // Hide all panes
+        elements.paneAccountProfile.style.display = 'none';
+        elements.paneAccountAddresses.style.display = 'none';
+        elements.paneAccountHistory.style.display = 'none';
+        elements.paneAccountVouchers.style.display = 'none';
+
+        // Show targets
+        const activeBtn = document.getElementById(`tab-btn-${tabName}`);
+        const activePane = document.getElementById(`pane-account-${tabName}`);
+        if (activeBtn) {
+            activeBtn.classList.add('active');
+            activeBtn.style.color = 'white';
+            activeBtn.style.borderBottomColor = 'var(--primary)';
+        }
+        if (activePane) {
+            activePane.style.display = 'block';
+        }
+
+        activeAccountTab = tabName;
+
+        if (tabName === 'addresses') {
+            renderAddresses();
+        } else if (tabName === 'history') {
+            renderOrderHistory();
+        } else if (tabName === 'vouchers') {
+            renderVouchers();
+        }
+    }
+
+    async function renderAddresses() {
+        elements.accountAddressList.innerHTML = '';
+        elements.formAccountAddress.style.display = 'none';
+        
+        const addresses = await db.getSavedAddresses();
+        if (addresses.length === 0) {
+            elements.accountAddressList.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                    <i class="fa-solid fa-map-location-dot" style="font-size: 2rem; margin-bottom: 8px;"></i>
+                    <p style="font-size: 0.85rem;">No saved addresses yet.</p>
+                </div>
+            `;
+            return;
+        }
+
+        addresses.forEach(addr => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '12px 16px';
+            card.style.display = 'flex';
+            card.style.justifyContent = 'space-between';
+            card.style.alignItems = 'center';
+            card.style.background = 'rgba(255,255,255,0.02)';
+            
+            const emoji = addr.tag === 'Home' ? '🏠' : (addr.tag === 'Work' ? '💼' : '📍');
+            card.innerHTML = `
+                <div style="flex-grow: 1; text-align: left;">
+                    <strong style="font-size: 0.9rem; color: var(--primary);">${emoji} ${addr.tag}</strong>
+                    <p style="font-size: 0.8rem; color: var(--text-main); margin-top: 4px; line-height: 1.3;">${addr.address}</p>
+                    <span style="font-size: 0.7rem; color: var(--text-muted);">Coords: ${addr.lat.toFixed(4)}, ${addr.lng.toFixed(4)}</span>
+                </div>
+                <button class="btn-icon delete-addr-btn" style="width: 32px; height: 32px; color: var(--danger); border-color: rgba(239, 68, 68, 0.2);" title="Delete Address">
+                    <i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i>
+                </button>
+            `;
+
+            card.querySelector('.delete-addr-btn').addEventListener('click', async () => {
+                if (confirm(`Delete saved address "${addr.tag}"?`)) {
+                    const ok = await db.deleteSavedAddress(addr.id);
+                    if (ok) {
+                        showToast("Address deleted successfully!");
+                        await renderAddresses();
+                        await populateCheckoutAddressSelect();
+                    }
+                }
+            });
+
+            elements.accountAddressList.appendChild(card);
+        });
+    }
+
+    async function renderOrderHistory() {
+        elements.accountHistoryOrders.innerHTML = '';
+        const orders = await db.getOrders();
+        
+        if (orders.length === 0) {
+            elements.accountHistoryOrders.innerHTML = `
+                <div style="text-align: center; padding: 30px; color: var(--text-muted);">
+                    <i class="fa-solid fa-bag-shopping" style="font-size: 2rem; margin-bottom: 8px;"></i>
+                    <p style="font-size: 0.85rem;">You have not placed any orders yet.</p>
+                </div>
+            `;
+            return;
+        }
+
+        orders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        orders.forEach(order => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '14px 16px';
+            card.style.background = 'rgba(255,255,255,0.02)';
+            
+            const badgeClass = order.status.toLowerCase().replace(' ', '-');
+            const itemsList = order.items.map(item => `${item.name} (x${item.quantity})`).join(', ');
+            const dateStr = new Date(order.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+            
+            const reorderBtnId = `reorder-${order.id}`;
+            const discountHtml = order.discount && order.discount > 0
+                ? `<div style="font-size: 0.75rem; color: var(--secondary); margin-top: 4px; text-align: left;">Voucher Discount: -₹${order.discount.toFixed(2)}</div>`
+                : '';
+            
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
+                    <div style="text-align: left;">
+                        <strong style="font-size: 0.85rem; color: var(--text-main);">${order.storeName}</strong>
+                        <div style="font-size: 0.7rem; color: var(--text-muted);">${dateStr} | #${order.id}</div>
+                    </div>
+                    <span class="status-badge ${badgeClass}" style="font-size:0.7rem; padding: 4px 8px;">${order.status}</span>
+                </div>
+                <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 10px; text-align: left;">
+                    <strong>Items:</strong> ${itemsList}
+                </div>
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <div style="text-align: left;">
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">₹${(order.subtotal + order.deliveryFee - (order.discount || 0)).toFixed(2)}</span>
+                        ${discountHtml}
+                    </div>
+                    <button class="btn-premium btn-reorder" id="${reorderBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px;"><i class="fa-solid fa-rotate-left"></i> Reorder</button>
+                </div>
+            `;
+
+            card.querySelector('.btn-reorder').addEventListener('click', async () => {
+                let success = false;
+                const store = await db.getStoreById(order.storeId);
+                if (!store) {
+                    showToast("This store is no longer active or available.", "error");
+                    return;
+                }
+                
+                cart = [];
+                
+                for (const item of order.items) {
+                    const storeProduct = store.products.find(p => p.id === item.id);
+                    if (storeProduct && storeProduct.stock > 0) {
+                        const qty = Math.min(item.quantity, storeProduct.stock);
+                        for (let q = 0; q < qty; q++) {
+                            await addToCart(order.storeId, storeProduct);
+                        }
+                        success = true;
+                    }
+                }
+                
+                if (success) {
+                    showToast("Items added to cart! Proceeding to checkout...", "success");
+                    elements.accountOverlayElement.classList.remove('active');
+                    elements.accountDrawerElement.classList.remove('active');
+                    await renderCart();
+                    await switchView('checkout');
+                } else {
+                    showToast("Could not reorder. Items are currently out of stock.", "error");
+                }
+            });
+
+            elements.accountHistoryOrders.appendChild(card);
+        });
+    }
+
+    async function renderVouchers() {
+        elements.accountVoucherList.innerHTML = '';
+        const vouchers = await db.getVouchers();
+        
+        if (vouchers.length === 0) {
+            elements.accountVoucherList.innerHTML = `
+                <div style="text-align: center; padding: 20px; color: var(--text-muted);">
+                    <i class="fa-solid fa-ticket" style="font-size: 2rem; margin-bottom: 8px;"></i>
+                    <p style="font-size: 0.85rem;">No active discount codes available.</p>
+                </div>
+            `;
+            return;
+        }
+
+        vouchers.forEach(v => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '12px 16px';
+            card.style.background = 'rgba(255,255,255,0.02)';
+            card.style.borderLeft = '4px solid var(--secondary)';
+            
+            card.innerHTML = `
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <strong style="color: var(--secondary); font-family: monospace; font-size: 0.95rem; background: rgba(16,185,129,0.1); padding: 4px 10px; border-radius: 6px; border: 1px dashed var(--secondary);">${v.code}</strong>
+                    <button class="btn-outline btn-copy-code" style="font-size:0.7rem; padding: 4px 8px; border-radius: 6px;" data-code="${v.code}">Copy</button>
+                </div>
+                <p style="font-size: 0.8rem; color: var(--text-main); margin-top: 8px; font-weight: 500; text-align: left;">${v.desc}</p>
+                <div style="font-size: 0.7rem; color: var(--text-muted); margin-top: 4px; text-align: left;">Min. purchase required: ₹${v.minOrderValue}</div>
+            `;
+
+            card.querySelector('.btn-copy-code').addEventListener('click', () => {
+                navigator.clipboard.writeText(v.code);
+                showToast(`Code "${v.code}" copied to clipboard!`);
+            });
+
+            elements.accountVoucherList.appendChild(card);
+        });
+    }
+
+    async function populateCheckoutAddressSelect() {
+        elements.checkoutAddressSelect.innerHTML = '';
+        const addresses = await db.getSavedAddresses();
+        
+        if (addresses.length === 0) {
+            elements.checkoutAddressSelectGroup.style.display = 'none';
+            return;
+        }
+
+        elements.checkoutAddressSelectGroup.style.display = 'block';
+        
+        const defaultOption = document.createElement('option');
+        defaultOption.value = '';
+        defaultOption.innerText = '-- Choose a Saved Address or type below --';
+        elements.checkoutAddressSelect.appendChild(defaultOption);
+
+        addresses.forEach(addr => {
+            const opt = document.createElement('option');
+            opt.value = JSON.stringify({ address: addr.address, lat: addr.lat, lng: addr.lng });
+            opt.innerText = `${addr.tag}: ${addr.address}`;
+            elements.checkoutAddressSelect.appendChild(opt);
+        });
     }
 
     async function updateActiveOrderButtonVisibility() {
@@ -249,11 +625,98 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const res = await db.register(registerData);
         if (res.success) {
-            showToast(`Account created successfully! Welcome, ${res.user.name}.`, "success");
+            showToast("Account created successfully! Welcome, " + res.user.name + ".", "success");
             toggleAuthModal(false);
             await initAuth();
         } else {
             showToast(res.error, "error");
+        }
+    }
+
+    async function handleChangePasswordSubmit(e) {
+        e.preventDefault();
+        const oldPassword = elements.changePwdOld.value;
+        const newPassword = elements.changePwdNew.value;
+        const confirmPassword = elements.changePwdConfirm.value;
+
+        if (newPassword !== confirmPassword) {
+            showToast("New passwords do not match!", "error");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/change-password`, {
+                method: 'PUT',
+                headers: db.getHeaders(),
+                body: JSON.stringify({ oldPassword, newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Password updated successfully!", "success");
+                elements.formChangePassword.reset();
+            } else {
+                showToast(data.error || "Failed to update password", "error");
+            }
+        } catch (err) {
+            console.error("Error changing password:", err);
+            showToast("Network connection error", "error");
+        }
+    }
+
+    async function handleForgotRequestSubmit(e) {
+        e.preventDefault();
+        const email = elements.forgotEmail.value.trim();
+        
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Reset code sent! Check console / alert.", "success");
+                alert(`[MOCK EMAIL SERVICE]\nTo: ${email}\nYour LuxeGrocer password reset code is: ${data.otp}`);
+                
+                elements.formForgotRequest.style.display = 'none';
+                elements.formForgotReset.style.display = 'flex';
+                elements.forgotOtp.value = '';
+                elements.forgotNewPassword.value = '';
+            } else {
+                showToast(data.error || "Password reset request failed", "error");
+            }
+        } catch (err) {
+            console.error("Forgot password request error:", err);
+            showToast("Network connection error", "error");
+        }
+    }
+
+    async function handleForgotResetSubmit(e) {
+        e.preventDefault();
+        const email = elements.forgotEmail.value.trim();
+        const otp = elements.forgotOtp.value.trim();
+        const newPassword = elements.forgotNewPassword.value;
+
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp, newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Password has been reset successfully!", "success");
+                
+                elements.modalForgotPassword.style.display = 'none';
+                elements.modalForgotPassword.classList.remove('active');
+                
+                toggleAuthModal(true);
+            } else {
+                showToast(data.error || "Reset password failed", "error");
+            }
+        } catch (err) {
+            console.error("Reset password error:", err);
+            showToast("Network connection error", "error");
         }
     }
 
@@ -282,6 +745,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.viewLanding.style.display = 'block';
                 renderCategories();
                 await renderStores();
+                await renderFavoritesCarousel();
                 simulateWeatherAndSpeed();
                 break;
             case 'search-results':
@@ -407,18 +871,146 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    function getFavorites() {
+        const stored = localStorage.getItem('luxegrocer_favorites');
+        return stored ? JSON.parse(stored) : [];
+    }
+
+    function toggleFavorite(storeId, event) {
+        if (event) {
+            event.stopPropagation();
+            event.preventDefault();
+        }
+        let favs = getFavorites();
+        if (favs.includes(storeId)) {
+            favs = favs.filter(id => id !== storeId);
+            showToast("Removed store from bookmarks.");
+        } else {
+            favs.push(storeId);
+            showToast("Added store to bookmarks! ❤️", "success");
+        }
+        localStorage.setItem('luxegrocer_favorites', JSON.stringify(favs));
+        renderStores();
+        renderFavoritesCarousel();
+        
+        // Also update store profile details if active
+        if (activeStore && activeStore.id === storeId) {
+            loadStoreProfile(storeId);
+        }
+    }
+
+    async function renderFavoritesCarousel() {
+        if (!elements.favoritesCarouselList || !elements.favoritesCarouselContainer) return;
+        elements.favoritesCarouselList.innerHTML = '';
+        
+        const favs = getFavorites();
+        if (favs.length === 0) {
+            elements.favoritesCarouselContainer.style.display = 'none';
+            return;
+        }
+
+        const stores = await db.getStores();
+        const favStores = stores.filter(s => favs.includes(s.id));
+
+        if (favStores.length === 0) {
+            elements.favoritesCarouselContainer.style.display = 'none';
+            return;
+        }
+
+        elements.favoritesCarouselContainer.style.display = 'block';
+
+        favStores.forEach(store => {
+            const card = document.createElement('div');
+            card.className = 'glass-card store-card-compact';
+            card.style.display = 'inline-block';
+            card.style.width = '240px';
+            card.style.flexShrink = '0';
+            card.style.cursor = 'pointer';
+            card.style.marginRight = '10px';
+            card.style.position = 'relative';
+            
+            const isClosed = store.status === 'Closed';
+            if (isClosed) {
+                card.style.opacity = '0.65';
+                card.style.filter = 'grayscale(0.7)';
+            }
+
+            card.innerHTML = `
+                <div class="store-banner-wrapper" style="position: relative; height: 110px;">
+                    ${isClosed ? `<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: 12px 12px 0 0;"><span style="color: white; font-weight: 800; letter-spacing: 1px; font-size: 0.8rem; border: 1.5px solid white; padding: 2px 8px; border-radius: 4px; background: rgba(239, 68, 68, 0.75);">CLOSED</span></div>` : ''}
+                    <img class="store-banner-img" src="${store.image}" style="height: 100%; width: 100%; object-fit: cover;" alt="${store.name}">
+                    <span class="store-badge" style="font-size: 0.7rem; padding: 3px 8px; top: 8px; left: 8px;">${store.category}</span>
+                    <button class="btn-icon btn-fav-toggle" data-id="${store.id}" style="position: absolute; top: 8px; right: 8px; z-index: 10; border-radius: 50%; width: 28px; height: 28px; background: rgba(0,0,0,0.5); border: none; color: #f43f5e;" title="Remove Bookmark">
+                        <i class="fa-solid fa-heart" style="font-size: 0.85rem;"></i>
+                    </button>
+                </div>
+                <div class="store-details" style="padding: 10px 12px;">
+                    <div class="store-title-row" style="margin-bottom: 4px;">
+                        <h4 style="margin: 0; font-size: 0.85rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-main); text-align: left;">${store.name}</h4>
+                        <span class="store-rating" style="font-size: 0.75rem;"><i class="fa-solid fa-star"></i> ${store.rating.toFixed(1)}</span>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); display: flex; justify-content: space-between;">
+                        <span>${store.distance} km</span>
+                        <span style="color: var(--secondary); font-weight: 600;">${isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins'}</span>
+                    </div>
+                </div>
+            `;
+
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-fav-toggle')) return;
+                loadStoreProfile(store.id);
+            });
+
+            card.querySelector('.btn-fav-toggle').addEventListener('click', (e) => {
+                toggleFavorite(store.id, e);
+            });
+
+            elements.favoritesCarouselList.appendChild(card);
+        });
+    }
+
     async function renderStores() {
         elements.storeListContainer.innerHTML = '';
-        const stores = await db.getStores();
+        let stores = await db.getStores();
+
+        // 1. Filter by open only
+        if (filterOpenOnly) {
+            stores = stores.filter(s => s.status !== 'Closed');
+        }
+
+        // 2. Sort stores
+        if (storeSortBy === 'rating') {
+            stores.sort((a, b) => b.rating - a.rating);
+        } else if (storeSortBy === 'delivery-fee') {
+            stores.sort((a, b) => db.getDeliveryFee(a.distance, 0) - db.getDeliveryFee(b.distance, 0));
+        } else if (storeSortBy === 'speed') {
+            stores.sort((a, b) => a.distance - b.distance); // distance is proxy for speed
+        } else {
+            // Default: distance
+            stores.sort((a, b) => a.distance - b.distance);
+        }
+
+        const favs = getFavorites();
 
         stores.forEach(store => {
             const card = document.createElement('div');
             card.className = 'glass-card store-card';
+            const isClosed = store.status === 'Closed';
+            if (isClosed) {
+                card.style.opacity = '0.65';
+                card.style.filter = 'grayscale(0.7)';
+            }
+            const isFav = favs.includes(store.id);
+
             card.innerHTML = `
-                <div class="store-banner-wrapper">
+                <div class="store-banner-wrapper" style="position: relative;">
+                    ${isClosed ? `<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: 12px 12px 0 0;"><span style="color: white; font-weight: 800; letter-spacing: 1.5px; font-size: 0.95rem; border: 1.5px solid white; padding: 4px 12px; border-radius: 4px; background: rgba(239, 68, 68, 0.75);">CLOSED</span></div>` : ''}
                     <img class="store-banner-img" src="${store.image}" alt="${store.name}">
                     <div class="store-overlay"></div>
                     <span class="store-badge">${store.category}</span>
+                    <button class="btn-icon btn-fav-toggle" data-id="${store.id}" style="position: absolute; top: 12px; right: 12px; z-index: 10; border-radius: 50%; width: 36px; height: 36px; background: rgba(0,0,0,0.45); border: none; color: ${isFav ? '#f43f5e' : 'white'};" title="${isFav ? 'Remove Bookmark' : 'Bookmark Store'}">
+                        <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-heart" style="font-size: 1.1rem;"></i>
+                    </button>
                 </div>
                 <div class="store-details">
                     <div class="store-title-row">
@@ -427,14 +1019,21 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="store-info-tags">
                         <span class="store-info-tag"><i class="fa-solid fa-person-biking"></i> ${store.distance} km away</span>
-                        <span class="store-info-tag" style="color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981; animation: pulse 1.5s infinite;"></i> <strong>${Math.round(store.distance * 3 + 5)} Mins</strong></span>
+                        <span class="store-info-tag" style="color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed ? '#ef4444' : '#10b981'}; animation: ${isClosed ? 'none' : 'pulse 1.5s infinite'};"></i> <strong>${isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins'}</strong></span>
                     </div>
                     <div class="store-address"><i class="fa-solid fa-map-pin"></i> ${store.address}</div>
                 </div>
             `;
-            card.addEventListener('click', () => {
+            
+            card.addEventListener('click', (e) => {
+                if (e.target.closest('.btn-fav-toggle')) return;
                 loadStoreProfile(store.id);
             });
+
+            card.querySelector('.btn-fav-toggle').addEventListener('click', (e) => {
+                toggleFavorite(store.id, e);
+            });
+
             elements.storeListContainer.appendChild(card);
         });
     }
@@ -510,15 +1109,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<span class="product-price-slashed">₹${match.product.originalPrice.toFixed(2)}</span>₹${match.product.price.toFixed(2)}` 
                 : `₹${match.product.price.toFixed(2)}`;
             
+            let variantSelectorHtml = '';
+            if (match.product.variants && match.product.variants.length > 0) {
+                variantSelectorHtml = `
+                    <div class="product-variant-selector" style="margin-top: 8px; margin-bottom: 8px;">
+                        <select class="variant-select glass-input" style="width: 100%; padding: 4px 8px; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white;">
+                            ${match.product.variants.map(v => `<option value="${v.id}">${v.name} - ₹${v.price.toFixed(2)}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+            
             card.innerHTML = `
                 ${badgeHtml}
                 <div class="compare-emoji">${visualContent}</div>
                 <div class="compare-info">
                     <h3>${match.product.name}</h3>
                     <div class="compare-desc">${match.product.desc || 'No description available.'}</div>
+                    ${variantSelectorHtml}
                     <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 10px;">
-                        Unit: <strong>${match.product.unit}</strong> | Stock: 
-                        <span class="${match.product.stock > 0 ? 'product-stock-tag in-stock' : 'product-stock-tag out-stock'}">${match.product.stock > 0 ? `${match.product.stock} available` : 'Out of Stock'}</span>
+                        Unit: <strong id="search-unit-tag-${match.product.id}-${match.store.id}">${match.product.unit}</strong> | Stock: 
+                        <span class="${match.product.stock > 0 ? 'product-stock-tag in-stock' : 'product-stock-tag out-stock'}" id="search-stock-tag-${match.product.id}-${match.store.id}">${match.product.stock > 0 ? `${match.product.stock} available` : 'Out of Stock'}</span>
                     </div>
                     <a href="#" class="compare-shop-link" data-store-id="${match.store.id}">
                         <i class="fa-solid fa-shop"></i> Available at <strong>${match.store.name}</strong> (${match.store.distance} km)
@@ -528,12 +1139,41 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                 </div>
                 <div class="compare-action-block">
-                    <div class="price">${priceHtml}</div>
+                    <div class="price" id="search-price-tag-${match.product.id}-${match.store.id}">${priceHtml}</div>
                     <button class="btn-premium btn-add-cart" data-store-id="${match.store.id}" data-product-id="${match.product.id}" ${match.product.stock === 0 ? 'disabled' : ''}>
                         <i class="fa-solid fa-plus"></i> Add to Cart
                     </button>
                 </div>
             `;
+
+            if (match.product.variants && match.product.variants.length > 0) {
+                const selectEl = card.querySelector('.variant-select');
+                const updateSearchCardUI = () => {
+                    const selectedId = selectEl.value;
+                    const variant = match.product.variants.find(v => v.id === selectedId);
+                    if (variant) {
+                        const priceTag = card.querySelector(`#search-price-tag-${match.product.id}-${match.store.id}`);
+                        const unitTag = card.querySelector(`#search-unit-tag-${match.product.id}-${match.store.id}`);
+                        const stockTag = card.querySelector(`#search-stock-tag-${match.product.id}-${match.store.id}`);
+                        
+                        priceTag.innerText = `₹${variant.price.toFixed(2)}`;
+                        unitTag.innerText = variant.name;
+                        
+                        if (variant.stock > 0) {
+                            stockTag.className = 'product-stock-tag in-stock';
+                            stockTag.innerText = `${variant.stock} available`;
+                            card.querySelector('.btn-add-cart').disabled = false;
+                        } else {
+                            stockTag.className = 'product-stock-tag out-stock';
+                            stockTag.innerText = 'Out of Stock';
+                            card.querySelector('.btn-add-cart').disabled = true;
+                        }
+                    }
+                };
+                selectEl.addEventListener('change', updateSearchCardUI);
+                // Run initially to set first variant
+                updateSearchCardUI();
+            }
 
             card.querySelector('.compare-shop-link').addEventListener('click', async (e) => {
                 e.preventDefault();
@@ -541,7 +1181,12 @@ document.addEventListener('DOMContentLoaded', () => {
             });
 
             card.querySelector('.btn-add-cart').addEventListener('click', async (e) => {
-                await addToCart(match.store.id, match.product, e);
+                let selectedVariant = null;
+                if (match.product.variants && match.product.variants.length > 0) {
+                    const selectedId = card.querySelector('.variant-select').value;
+                    selectedVariant = match.product.variants.find(v => v.id === selectedId);
+                }
+                await addToCart(match.store.id, match.product, selectedVariant, e);
             });
 
             elements.searchComparisonContainer.appendChild(card);
@@ -554,13 +1199,23 @@ document.addEventListener('DOMContentLoaded', () => {
         activeStore = store;
         activeCategoryFilter = 'all';
 
+        const isFav = getFavorites().includes(store.id);
+        const isClosed = store.status === 'Closed';
         elements.storeProfileHeaderContainer.innerHTML = `
-            <div class="store-profile-header">
+            <div class="store-profile-header" style="${isClosed ? 'filter: grayscale(0.4); opacity: 0.85;' : ''}">
                 <img class="store-header-banner" src="${store.image}" alt="${store.name}">
                 <div class="store-header-overlay"></div>
                 <div class="store-header-content">
                     <div class="store-header-left">
-                        <h1>${store.name}</h1>
+                        <div style="display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+                            <h1 style="margin: 0; display: inline-flex; align-items: center; gap: 10px;">
+                                ${store.name}
+                                <button class="btn-icon btn-fav-profile-toggle" data-id="${store.id}" style="border-radius: 50%; width: 36px; height: 36px; background: rgba(0,0,0,0.45); border: none; color: ${isFav ? '#f43f5e' : 'white'}; cursor: pointer; display: inline-flex; align-items: center; justify-content: center;" title="${isFav ? 'Remove Bookmark' : 'Bookmark Store'}">
+                                    <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-heart" style="font-size: 1.1rem;"></i>
+                                </button>
+                            </h1>
+                            ${isClosed ? `<span style="background: #ef4444; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; letter-spacing: 1px;">CLOSED OFFLINE</span>` : ''}
+                        </div>
                         <p><i class="fa-solid fa-map-pin"></i> ${store.address} | <i class="fa-solid fa-phone"></i> ${store.phone}</p>
                     </div>
                     <div class="store-header-stats">
@@ -569,17 +1224,24 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span>Rating</span>
                         </div>
                         <div class="store-stat-box">
-                            <h4 style="color: var(--secondary); display: inline-flex; align-items: center; justify-content: center; gap: 4px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981; animation: pulse 1.5s infinite;"></i> ${Math.round(store.distance * 3 + 5)} Mins</h4>
+                            <h4 style="color: ${isClosed ? 'var(--danger)' : 'var(--secondary)'}; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed ? '#ef4444' : '#10b981'}; ${isClosed ? '' : 'animation: pulse 1.5s infinite;'}"></i> ${isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins'}</h4>
                             <span>ETA (${store.distance} km)</span>
                         </div>
                         <div class="store-stat-box">
-                            <h4>₹${store.distance <= 2 ? '15.00' : '35.00'}</h4>
+                            <h4>₹${db.getDeliveryFee(store.distance, 0).toFixed(2)}</h4>
                             <span>Direct Delivery</span>
                         </div>
                     </div>
                 </div>
             </div>
         `;
+
+        const favProfileBtn = elements.storeProfileHeaderContainer.querySelector('.btn-fav-profile-toggle');
+        if (favProfileBtn) {
+            favProfileBtn.addEventListener('click', (e) => {
+                toggleFavorite(store.id, e);
+            });
+        }
 
         elements.storeCategoryTabs.innerHTML = '';
         const storeCategories = ['all', ...new Set(store.products.map(p => p.category))];
@@ -646,27 +1308,75 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<span class="product-price-slashed">₹${prod.originalPrice.toFixed(2)}</span>₹${prod.price.toFixed(2)}` 
                 : `₹${prod.price.toFixed(2)}`;
             
+            const isClosed = activeStore && activeStore.status === 'Closed';
+            
+            let variantSelectorHtml = '';
+            if (prod.variants && prod.variants.length > 0) {
+                variantSelectorHtml = `
+                    <div class="product-variant-selector" style="margin-top: 8px;">
+                        <select class="variant-select glass-input" style="width: 100%; padding: 4px 8px; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white;">
+                            ${prod.variants.map(v => `<option value="${v.id}">${v.name} - ₹${v.price.toFixed(2)}</option>`).join('')}
+                        </select>
+                    </div>
+                `;
+            }
+
             card.innerHTML = `
                 ${badgeHtml}
                 <div class="product-card-top">
                     <div class="product-emoji-container">${visualContent}</div>
-                    <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
+                    <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}" id="stock-tag-${prod.id}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
                 </div>
                 <div class="product-info">
                     <h3>${prod.name}</h3>
-                    <div class="product-unit">${prod.unit}</div>
+                    <div class="product-unit" id="unit-tag-${prod.id}">${prod.unit}</div>
                     <p class="product-desc">${prod.desc || 'Fresh item sourced locally.'}</p>
+                    ${variantSelectorHtml}
                 </div>
                 <div class="product-footer">
-                    <div class="product-price">${priceHtml}</div>
-                    <button class="btn-premium btn-add-cart" ${prod.stock === 0 ? 'disabled' : ''}>
-                        <i class="fa-solid fa-cart-plus"></i> Add
+                    <div class="product-price" id="price-tag-${prod.id}">${priceHtml}</div>
+                    <button class="btn-premium btn-add-cart" ${prod.stock === 0 || isClosed ? 'disabled' : ''}>
+                        ${isClosed ? 'Closed' : '<i class="fa-solid fa-cart-plus"></i> Add'}
                     </button>
                 </div>
             `;
 
+            if (prod.variants && prod.variants.length > 0) {
+                const selectEl = card.querySelector('.variant-select');
+                const updateCardUI = () => {
+                    const selectedId = selectEl.value;
+                    const variant = prod.variants.find(v => v.id === selectedId);
+                    if (variant) {
+                        const priceTag = card.querySelector(`#price-tag-${prod.id}`);
+                        const unitTag = card.querySelector(`#unit-tag-${prod.id}`);
+                        const stockTag = card.querySelector(`#stock-tag-${prod.id}`);
+                        
+                        priceTag.innerText = `₹${variant.price.toFixed(2)}`;
+                        unitTag.innerText = variant.name;
+                        
+                        if (variant.stock > 0) {
+                            stockTag.className = 'product-stock-tag in-stock';
+                            stockTag.innerText = 'In Stock';
+                            card.querySelector('.btn-add-cart').disabled = isClosed;
+                        } else {
+                            stockTag.className = 'product-stock-tag out-stock';
+                            stockTag.innerText = 'Out of Stock';
+                            card.querySelector('.btn-add-cart').disabled = true;
+                        }
+                    }
+                };
+                selectEl.addEventListener('change', updateCardUI);
+                // Run initially to set first variant
+                updateCardUI();
+            }
+
             card.querySelector('.btn-add-cart').addEventListener('click', async (e) => {
-                await addToCart(activeStore.id, prod, e);
+                let selectedVariant = null;
+                if (prod.variants && prod.variants.length > 0) {
+                    const selectedId = card.querySelector('.variant-select').value;
+                    selectedVariant = prod.variants.find(v => v.id === selectedId);
+                }
+                await addToCart(activeStore.id, prod, selectedVariant, e);
             });
 
             elements.storeProductsContainer.appendChild(card);
@@ -709,7 +1419,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Shopping Cart Drawer ---
-    async function addToCart(storeId, product, event = null) {
+    async function addToCart(storeId, product, variant = null, event = null) {
+        // Handle argument shifting if third parameter is an Event
+        if (variant && (variant instanceof Event || typeof variant.clientX !== 'undefined' || typeof variant.preventDefault === 'function')) {
+            event = variant;
+            variant = null;
+        }
+
         if (cart.length > 0 && cart[0].storeId !== storeId) {
             const oldStore = cart[0].storeName;
             const confirmChange = confirm(`Your cart contains items from "${oldStore}". Would you like to clear your cart to add items from the new store?`);
@@ -720,11 +1436,27 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         }
 
-        const existingItem = cart.find(item => item.id === product.id);
         const store = await db.getStoreById(storeId);
+        if (store && store.status === 'Closed') {
+            showToast("This store is currently closed/offline. You cannot order from here.", "error");
+            return;
+        }
+
+        // If product has variants, and none is supplied, default to the first variant
+        if (product.variants && product.variants.length > 0 && !variant) {
+            variant = product.variants[0];
+        }
+
+        const itemId = variant ? `${product.id}-${variant.id}` : product.id;
+        const itemName = variant ? `${product.name} (${variant.name})` : product.name;
+        const itemPrice = variant ? variant.price : product.price;
+        const itemUnit = variant ? variant.name : product.unit;
+        const maxStock = variant ? variant.stock : product.stock;
+
+        const existingItem = cart.find(item => item.id === itemId);
         
         if (existingItem) {
-            if (existingItem.quantity >= product.stock) {
+            if (existingItem.quantity >= maxStock) {
                 showToast("Store stock limit reached", "error");
                 return;
             }
@@ -732,13 +1464,15 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             const itemImage = product.image && product.image.trim() !== '' ? product.image : '';
             cart.push({
-                id: product.id,
-                name: product.name,
-                price: product.price,
+                id: itemId,
+                productId: product.id,
+                variantId: variant ? variant.id : null,
+                name: itemName,
+                price: itemPrice,
                 quantity: 1,
                 emoji: getProductEmoji(product.name, product.category),
                 image: itemImage,
-                unit: product.unit,
+                unit: itemUnit,
                 storeId: storeId,
                 storeName: store ? store.name : 'Local Shop',
                 storeDistance: store ? store.distance : 1
@@ -755,7 +1489,7 @@ document.addEventListener('DOMContentLoaded', () => {
         saveCartToStorage();
         updateCartBadge();
         await renderCart();
-        showToast(`Added ${product.name} to cart.`);
+        showToast(`Added ${itemName} to cart.`);
     }
 
     function saveCartToStorage() {
@@ -780,22 +1514,29 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    async function updateQuantity(productId, action) {
-        const itemIndex = cart.findIndex(item => item.id === productId);
+    async function updateQuantity(itemId, action) {
+        const itemIndex = cart.findIndex(item => item.id === itemId);
         if (itemIndex === -1) return;
 
-        const store = await db.getStoreById(cart[itemIndex].storeId);
-        const product = store ? store.products.find(p => p.id === productId) : null;
+        const cartItem = cart[itemIndex];
+        const store = await db.getStoreById(cartItem.storeId);
+        const product = store ? store.products.find(p => p.id === cartItem.productId || p.id === cartItem.id) : null;
+
+        let maxStock = product ? product.stock : 0;
+        if (product && cartItem.variantId && product.variants) {
+            const v = product.variants.find(varItem => varItem.id === cartItem.variantId);
+            if (v) maxStock = v.stock;
+        }
 
         if (action === 'increase') {
-            if (product && cart[itemIndex].quantity >= product.stock) {
+            if (cartItem.quantity >= maxStock) {
                 showToast("Cannot add more, stock limit reached", "error");
                 return;
             }
-            cart[itemIndex].quantity++;
+            cartItem.quantity++;
         } else if (action === 'decrease') {
-            cart[itemIndex].quantity--;
-            if (cart[itemIndex].quantity <= 0) {
+            cartItem.quantity--;
+            if (cartItem.quantity <= 0) {
                 cart.splice(itemIndex, 1);
             }
         }
@@ -862,10 +1603,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Compute dynamic free delivery indicator progress
         const FREE_DELIVERY_THRESHOLD = 300;
-        let deliveryFee = cart[0].storeDistance <= 2 ? 15.00 : 35.00;
+        let deliveryFee = db.getDeliveryFee(cart[0].storeDistance, subtotal);
         
         if (subtotal >= FREE_DELIVERY_THRESHOLD) {
-            deliveryFee = 0.00;
             elements.savingsValue.innerText = "UNLOCKED! 🎉";
             elements.savingsValue.style.color = "var(--primary)";
             elements.savingsProgressBar.style.width = "100%";
@@ -974,7 +1714,7 @@ document.addEventListener('DOMContentLoaded', () => {
             div.innerHTML = `
                 <div style="display:flex; align-items:center; gap: 10px;">
                     ${visualContent}
-                    <div>
+                    <div style="text-align: left;">
                         <span style="font-size: 0.95rem; font-weight: 500;">${item.name}</span>
                         <br><span style="font-size: 0.75rem; color: var(--text-muted);">${item.quantity} x ₹${item.price.toFixed(2)} (${item.unit})</span>
                     </div>
@@ -986,12 +1726,26 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Calculate delivery fee
         const distance = cart[0].storeDistance;
-        let deliveryFee = distance <= 2 ? 15.00 : 35.00;
-        if (subtotal >= 300) {
-            deliveryFee = 0.00; // Free delivery
+        let deliveryFee = db.getDeliveryFee(distance, subtotal);
+
+        let discount = 0;
+        if (appliedVoucher) {
+            if (subtotal < appliedVoucher.minOrderValue) {
+                appliedVoucher = null;
+                elements.couponAppliedMsg.style.display = 'none';
+                elements.couponErrorMsg.style.display = 'block';
+                elements.couponErrorMsg.innerText = `Coupon removed: Requires min purchase of ₹${appliedVoucher.minOrderValue}`;
+            } else {
+                if (appliedVoucher.discountType === 'fixed') {
+                    discount = Math.min(appliedVoucher.value, subtotal);
+                } else if (appliedVoucher.discountType === 'free-delivery') {
+                    discount = deliveryFee;
+                    deliveryFee = 0.00;
+                }
+            }
         }
 
-        const grandTotal = subtotal + deliveryFee + selectedTipAmount;
+        const grandTotal = subtotal + deliveryFee + selectedTipAmount - discount;
 
         elements.checkoutSubtotal.innerText = `₹${subtotal.toFixed(2)}`;
         elements.checkoutDeliveryFee.innerText = `₹${deliveryFee.toFixed(2)}`;
@@ -1001,6 +1755,13 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.checkoutRiderTipAmount.innerText = `₹${selectedTipAmount.toFixed(2)}`;
         } else {
             elements.checkoutRiderTipRow.style.display = 'none';
+        }
+
+        if (discount > 0) {
+            elements.checkoutDiscountRow.style.display = 'flex';
+            elements.checkoutDiscountAmount.innerText = `-₹${discount.toFixed(2)}`;
+        } else {
+            elements.checkoutDiscountRow.style.display = 'none';
         }
 
         elements.checkoutGrandTotal.innerText = `₹${grandTotal.toFixed(2)}`;
@@ -1051,6 +1812,26 @@ document.addEventListener('DOMContentLoaded', () => {
         if (e) e.preventDefault();
         if (cart.length === 0) return;
         
+        const storeId = cart[0].storeId;
+        const store = await db.getStoreById(storeId);
+        if (store && store.status === 'Closed') {
+            showToast("Checkout failed. This store is currently closed/offline.", "error");
+            return;
+        }
+        
+        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        let deliveryFee = db.getDeliveryFee(cart[0].storeDistance, subtotal);
+
+        let discount = 0;
+        if (appliedVoucher) {
+            if (appliedVoucher.discountType === 'fixed') {
+                discount = Math.min(appliedVoucher.value, subtotal);
+            } else if (appliedVoucher.discountType === 'free-delivery') {
+                discount = deliveryFee;
+                deliveryFee = 0.00;
+            }
+        }
+
         const customer = {
             name: elements.checkoutName.value.trim(),
             phone: elements.checkoutPhone.value.trim(),
@@ -1059,12 +1840,7 @@ document.addEventListener('DOMContentLoaded', () => {
             tip: selectedTipAmount
         };
 
-        const storeId = cart[0].storeId;
-        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        let deliveryFee = cart[0].storeDistance <= 2 ? 15.00 : 35.00;
-        if (subtotal >= 300) deliveryFee = 0.00;
-        
-        const grandTotal = subtotal + deliveryFee + selectedTipAmount;
+        const grandTotal = subtotal + deliveryFee + selectedTipAmount - discount;
 
         if (customer.payment === 'upi') {
             elements.upiGrandTotal.innerText = `₹${grandTotal.toFixed(2)}`;
@@ -1081,13 +1857,14 @@ document.addEventListener('DOMContentLoaded', () => {
                     <p style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">Payment Verified! Confirming order...</p>
                 `;
                 
-                const order = await db.createOrder(storeId, cart, customer);
+                const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '');
                 setTimeout(async () => {
                     elements.modalUpiPayment.style.display = 'none';
                     elements.modalUpiPayment.classList.remove('active');
                     
                     if (order) {
                         cart = [];
+                        appliedVoucher = null;
                         saveCartToStorage();
                         updateCartBadge();
                         showToast("Payment confirmed! Sourcing store rider.", "success");
@@ -1103,9 +1880,10 @@ document.addEventListener('DOMContentLoaded', () => {
                 }, 1200);
             }, 2500);
         } else {
-            const order = await db.createOrder(storeId, cart, customer);
+            const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '');
             if (order) {
                 cart = [];
+                appliedVoucher = null;
                 saveCartToStorage();
                 updateCartBadge();
                 showToast("COD Order placed successfully.", "success");
@@ -1162,7 +1940,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
         await updateTrackerTimeline();
         renderTrackerMap();
-        startCancelGracePeriodTimer(order.id);
+        if (order.status === 'Out for Delivery') {
+            animateRiderMarker();
+        }
+        if (order.status === 'Pending') {
+            startCancelGracePeriodTimer(order.id);
+        } else {
+            if (cancelGraceTimer) clearInterval(cancelGraceTimer);
+            elements.cancelGraceBox.style.display = 'none';
+        }
         await updateActiveOrderButtonVisibility();
     }
 
@@ -1213,7 +1999,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
         elements.trackerTimelineSteps.innerHTML = '';
         
-        const possibleStatuses = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
+        let possibleStatuses = ['Pending', 'Preparing', 'Out for Delivery', 'Delivered'];
+        if (freshOrder.status === 'Cancelled') {
+            possibleStatuses = ['Pending', 'Cancelled'];
+        }
         const activeIdx = possibleStatuses.indexOf(freshOrder.status);
 
         // Hide cancel window if status is no longer Pending
@@ -1237,6 +2026,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 stepDiv.classList.add('completed');
             } else if (idx === activeIdx) {
                 stepDiv.classList.add('active');
+                if (status === 'Cancelled') {
+                    stepDiv.classList.add('cancelled');
+                }
             }
 
             const record = freshOrder.statusTimeline.find(t => t.status === status);
@@ -1468,6 +2260,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function handleOrderDelivered(order) {
         scratchCardClaimed = true;
+        lastDeliveredOrder = order;
         playSoundbox(`Order delivered successfully. Settle status completed. Enjoy your premium grocery produce!`);
         
         setTimeout(() => {
@@ -1755,6 +2548,59 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.formCustomerLogin.addEventListener('submit', handleLoginSubmit);
     elements.formCustomerRegister.addEventListener('submit', handleRegisterSubmit);
+    elements.formChangePassword.addEventListener('submit', handleChangePasswordSubmit);
+    
+    if (elements.btnFilterOpenOnly) {
+        elements.btnFilterOpenOnly.addEventListener('click', () => {
+            filterOpenOnly = !filterOpenOnly;
+            if (filterOpenOnly) {
+                elements.btnFilterOpenOnly.style.background = 'var(--primary)';
+                elements.btnFilterOpenOnly.style.borderColor = 'var(--primary)';
+                elements.btnFilterOpenOnly.style.color = 'white';
+            } else {
+                elements.btnFilterOpenOnly.style.background = 'transparent';
+                elements.btnFilterOpenOnly.style.borderColor = '';
+                elements.btnFilterOpenOnly.style.color = '';
+            }
+            renderStores();
+        });
+    }
+
+    if (elements.selectStoreSort) {
+        elements.selectStoreSort.addEventListener('change', () => {
+            storeSortBy = elements.selectStoreSort.value;
+            renderStores();
+        });
+    }
+    
+    if (elements.linkForgotPassword) {
+        elements.linkForgotPassword.addEventListener('click', (e) => {
+            e.preventDefault();
+            toggleAuthModal(false);
+            
+            elements.formForgotRequest.style.display = 'flex';
+            elements.formForgotReset.style.display = 'none';
+            elements.formForgotRequest.reset();
+            elements.formForgotReset.reset();
+            
+            elements.modalForgotPassword.style.display = 'flex';
+            elements.modalForgotPassword.classList.add('active');
+        });
+    }
+
+    if (elements.btnCloseForgotModal) {
+        elements.btnCloseForgotModal.addEventListener('click', () => {
+            elements.modalForgotPassword.style.display = 'none';
+            elements.modalForgotPassword.classList.remove('active');
+        });
+    }
+
+    if (elements.formForgotRequest) {
+        elements.formForgotRequest.addEventListener('submit', handleForgotRequestSubmit);
+    }
+    if (elements.formForgotReset) {
+        elements.formForgotReset.addEventListener('submit', handleForgotResetSubmit);
+    }
 
     elements.btnCartCheckout.addEventListener('click', async () => {
         elements.cartOverlayElement.classList.remove('active');
@@ -1807,10 +2653,90 @@ document.addEventListener('DOMContentLoaded', () => {
         await updateActiveOrderButtonVisibility();
     });
 
+    function openReviewModal(order) {
+        elements.reviewStoreNameText.innerText = order.storeName;
+        elements.reviewRatingValue.value = "0";
+        elements.reviewComment.value = "";
+        
+        elements.modalStoreReview.querySelectorAll('.star-item i').forEach(star => {
+            star.className = 'fa-regular fa-star';
+            star.style.color = 'var(--text-muted)';
+        });
+        
+        elements.modalStoreReview.style.display = 'flex';
+        elements.modalStoreReview.classList.add('active');
+    }
+
+    elements.modalStoreReview.querySelectorAll('.star-item').forEach(item => {
+        item.addEventListener('click', () => {
+            const rating = parseInt(item.getAttribute('data-rating'));
+            elements.reviewRatingValue.value = rating;
+            
+            elements.modalStoreReview.querySelectorAll('.star-item').forEach(star => {
+                const starRating = parseInt(star.getAttribute('data-rating'));
+                const icon = star.querySelector('i');
+                if (starRating <= rating) {
+                    icon.className = 'fa-solid fa-star';
+                    icon.style.color = '#fbbf24';
+                } else {
+                    icon.className = 'fa-regular fa-star';
+                    icon.style.color = 'var(--text-muted)';
+                }
+            });
+        });
+    });
+
+    elements.formStoreReview.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const rating = parseInt(elements.reviewRatingValue.value);
+        if (!rating || rating < 1 || rating > 5) {
+            showToast("Please select a star rating first.", "error");
+            return;
+        }
+        
+        const comment = elements.reviewComment.value.trim();
+        const storeId = lastDeliveredOrder ? lastDeliveredOrder.storeId : null;
+        
+        if (!storeId) {
+            showToast("Error identifying store for review.", "error");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${db.baseUrl}/stores/${storeId}/reviews`, {
+                method: 'POST',
+                headers: db.getHeaders(),
+                body: JSON.stringify({ rating, comment })
+            });
+            if (res.ok) {
+                showToast("Thank you for your feedback!", "success");
+                elements.modalStoreReview.style.display = 'none';
+                elements.modalStoreReview.classList.remove('active');
+                lastDeliveredOrder = null;
+            } else {
+                showToast("Failed to submit feedback.", "error");
+            }
+        } catch (err) {
+            console.error("Error submitting review:", err);
+            showToast("Server connection error.", "error");
+        }
+    });
+
+    if (elements.btnCloseReviewModal) {
+        elements.btnCloseReviewModal.addEventListener('click', () => {
+            elements.modalStoreReview.style.display = 'none';
+            elements.modalStoreReview.classList.remove('active');
+            lastDeliveredOrder = null;
+        });
+    }
+
     elements.btnScratchDone.addEventListener('click', () => {
         elements.modalScratchCard.style.display = 'none';
         elements.modalScratchCard.classList.remove('active');
         showToast("Mystery coupon claimed successfully!", "success");
+        if (lastDeliveredOrder) {
+            openReviewModal(lastDeliveredOrder);
+        }
     });
 
     elements.btnCloseUpiModal.addEventListener('click', () => {
@@ -1830,6 +2756,172 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.modalLocationElement.classList.remove('active');
         showToast("Simulation coordinates updated successfully!");
     }
+
+    // --- Account Drawer Toggles & Tabs ---
+    if (elements.btnAccountTrigger) {
+        elements.btnAccountTrigger.addEventListener('click', () => {
+            elements.accountOverlayElement.classList.add('active');
+            elements.accountDrawerElement.classList.add('active');
+            showAccountTab('profile');
+        });
+    }
+
+    if (elements.btnCloseAccount) {
+        elements.btnCloseAccount.addEventListener('click', () => {
+            elements.accountOverlayElement.classList.remove('active');
+            elements.accountDrawerElement.classList.remove('active');
+        });
+    }
+
+    if (elements.accountOverlayElement) {
+        elements.accountOverlayElement.addEventListener('click', () => {
+            elements.accountOverlayElement.classList.remove('active');
+            elements.accountDrawerElement.classList.remove('active');
+        });
+    }
+
+    elements.tabBtnProfile.addEventListener('click', () => showAccountTab('profile'));
+    elements.tabBtnAddresses.addEventListener('click', () => showAccountTab('addresses'));
+    elements.tabBtnHistory.addEventListener('click', () => showAccountTab('history'));
+    elements.tabBtnVouchers.addEventListener('click', () => showAccountTab('vouchers'));
+
+    // Profile update submit
+    elements.formAccountProfile.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/me`, {
+                method: 'PUT',
+                headers: db.getHeaders(),
+                body: JSON.stringify({
+                    name: elements.accountProfileName.value.trim(),
+                    phone: elements.accountProfilePhone.value.trim()
+                })
+            });
+            if (res.ok) {
+                const updated = await res.json();
+                db.currentUser = updated;
+                elements.accountTriggerText.innerText = updated.name.split(' ')[0];
+                elements.checkoutName.value = updated.name;
+                elements.checkoutPhone.value = updated.phone;
+                showToast("Profile details updated successfully!", "success");
+            } else {
+                showToast("Failed to update profile.", "error");
+            }
+        } catch (err) {
+            console.error("Error updating profile:", err);
+            showToast("Server connection error.", "error");
+        }
+    });
+
+    // Address Add form toggling
+    elements.btnAddNewAddress.addEventListener('click', () => {
+        elements.formAccountAddress.reset();
+        elements.accountAddressId.value = '';
+        elements.formAccountAddress.style.display = 'flex';
+        // Auto fill HSR Preset by default
+        elements.accountAddressTag.value = 'Home';
+        elements.accountAddressLat.value = 12.9100;
+        elements.accountAddressLng.value = 77.6400;
+        elements.accountAddressDetail.value = 'Sector 3, HSR Layout, Bengaluru';
+    });
+
+    elements.btnCancelAddressForm.addEventListener('click', () => {
+        elements.formAccountAddress.style.display = 'none';
+    });
+
+    // Preset address buttons
+    elements.btnAddrPresetH.addEventListener('click', () => {
+        elements.accountAddressLat.value = 12.9100;
+        elements.accountAddressLng.value = 77.6400;
+        elements.accountAddressDetail.value = 'Sector 3, HSR Layout, Bengaluru, Karnataka';
+    });
+    elements.btnAddrPresetK.addEventListener('click', () => {
+        elements.accountAddressLat.value = 12.9250;
+        elements.accountAddressLng.value = 77.6220;
+        elements.accountAddressDetail.value = '4th Block, Koramangala, Bengaluru, Karnataka';
+    });
+    elements.btnAddrPresetI.addEventListener('click', () => {
+        elements.accountAddressLat.value = 12.9719;
+        elements.accountAddressLng.value = 77.6412;
+        elements.accountAddressDetail.value = '100 Feet Road, Indiranagar, Bengaluru, Karnataka';
+    });
+
+    // Address form submit
+    elements.formAccountAddress.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const addressData = {
+            tag: elements.accountAddressTag.value,
+            address: elements.accountAddressDetail.value.trim(),
+            lat: parseFloat(elements.accountAddressLat.value) || 12.9250,
+            lng: parseFloat(elements.accountAddressLng.value) || 77.6220
+        };
+
+        const added = await db.addSavedAddress(addressData);
+        if (added) {
+            showToast("Address saved successfully!", "success");
+            elements.formAccountAddress.style.display = 'none';
+            await renderAddresses();
+            await populateCheckoutAddressSelect();
+        } else {
+            showToast("Failed to save address.", "error");
+        }
+    });
+
+    // Coupon verification listeners
+    elements.btnApplyCoupon.addEventListener('click', async () => {
+        const code = elements.couponCodeInput.value.trim();
+        if (!code) {
+            showToast("Please enter a voucher code.", "info");
+            return;
+        }
+
+        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const res = await db.validateVoucher(code, subtotal);
+        if (res.success) {
+            appliedVoucher = res.voucher;
+            elements.couponAppliedMsg.style.display = 'flex';
+            elements.appliedCouponCode.innerText = res.voucher.code;
+            elements.couponErrorMsg.style.display = 'none';
+            elements.couponCodeInput.value = '';
+            showToast("Promo voucher applied successfully!", "success");
+            await renderCheckoutSummary();
+        } else {
+            elements.couponErrorMsg.style.display = 'block';
+            elements.couponErrorMsg.innerText = res.error;
+            elements.couponAppliedMsg.style.display = 'none';
+            showToast(res.error, "error");
+        }
+    });
+
+    elements.btnRemoveCoupon.addEventListener('click', async () => {
+        appliedVoucher = null;
+        elements.couponAppliedMsg.style.display = 'none';
+        elements.couponErrorMsg.style.display = 'none';
+        showToast("Voucher removed successfully.");
+        await renderCheckoutSummary();
+    });
+
+    elements.btnAccountLogout.addEventListener('click', async () => {
+        elements.accountOverlayElement.classList.remove('active');
+        elements.accountDrawerElement.classList.remove('active');
+        db.logout();
+        showToast("Signed out successfully.");
+        await initAuth();
+        await switchView('landing');
+    });
+
+    elements.checkoutAddressSelect.addEventListener('change', () => {
+        const val = elements.checkoutAddressSelect.value;
+        if (val) {
+            const parsed = JSON.parse(val);
+            elements.checkoutAddress.value = parsed.address;
+            
+            if (cart.length > 0) {
+                cart[0].storeDistance = db.calculateDistance(parsed.lat, parsed.lng, activeStore ? activeStore.lat : parsed.lat, activeStore ? activeStore.lng : parsed.lng);
+                renderCheckoutSummary();
+            }
+        }
+    });
 
     // --- Bootstrapping ---
     async function bootstrap() {

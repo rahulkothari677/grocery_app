@@ -20,7 +20,10 @@
             </a>
 
             <!-- Header Action Controls -->
-            <div class="nav-actions">
+            <div class="nav-actions" style="display: flex; gap: 10px; align-items: center;">
+                <button class="btn-premium" id="btn-merchant-profile" style="background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px;">
+                    <i class="fa-solid fa-user-gear"></i> Account Settings
+                </button>
                 <button class="btn-premium" id="btn-merchant-logout" style="background: transparent; border: 1.5px solid var(--danger); color: var(--danger); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px;">
                     <i class="fa-solid fa-right-from-bracket"></i> Sign Out
                 </button>
@@ -50,6 +53,9 @@
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
                         <input type="password" id="merchant-login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                    </div>
+                    <div style="text-align: right; margin-top: -8px;">
+                        <a href="#" id="link-merchant-forgot-password" style="color: var(--text-muted); font-size: 0.75rem; text-decoration: none;">Forgot Password?</a>
                     </div>
                     <button type="submit" class="btn-premium" style="width: 100%; padding: 12px; margin-top: 10px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Secure Sign In</button>
                     
@@ -115,8 +121,17 @@
                         <li class="owner-nav-item"><button class="active" id="btn-owner-nav-analytics"><i class="fa-solid fa-chart-line"></i> Analytics Dashboard</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-orders"><i class="fa-solid fa-receipt"></i> Orders Queue</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-inventory"><i class="fa-solid fa-boxes-stacked"></i> Inventory Manager</button></li>
+                        <li class="owner-nav-item"><button id="btn-owner-nav-reviews"><i class="fa-solid fa-star"></i> Customer Reviews</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-settings"><i class="fa-solid fa-sliders"></i> Store Settings</button></li>
                     </ul>
+
+                    <!-- Store Open/Closed Toggle Button -->
+                    <div style="border-top: 1px solid var(--border-color); padding-top: 20px; margin-top: 20px; text-align: center; display: flex; flex-direction: column; gap: 10px;">
+                        <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: bold; letter-spacing: 0.5px;">Store Operating Status</span>
+                        <button type="button" class="btn-premium" id="btn-toggle-store-status" style="width: 100%; padding: 8px; font-size: 0.8rem; background: #10b981; border-color: #10b981; color: white;">
+                            🟢 Open for Delivery
+                        </button>
+                    </div>
                 </aside>
 
                 <!-- Right Work Area -->
@@ -189,6 +204,16 @@
                                 <h2>Incoming Delivery Orders</h2>
                                 <p>Manage orders placed by customers in your delivery range</p>
                             </div>
+                        </div>
+
+                        <!-- Orders Tab Navigation -->
+                        <div style="display: flex; gap: 15px; margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 12px;" id="merchant-orders-tabs">
+                            <button type="button" class="btn-premium" id="btn-merchant-active-orders-tab" style="padding: 8px 18px; font-size: 0.85rem; border-radius: 8px; font-weight: 600;">
+                                Active Orders
+                            </button>
+                            <button type="button" class="btn-outline" id="btn-merchant-past-orders-tab" style="padding: 8px 18px; font-size: 0.85rem; border-radius: 8px; font-weight: 600; border-color: var(--border-color); color: var(--text-muted);">
+                                Order History
+                            </button>
                         </div>
 
                         <div class="owner-orders-container" id="owner-orders-queue-list">
@@ -267,6 +292,46 @@
                                 </div>
                                 <button type="submit" class="btn-premium" style="margin-top: 10px;">Save Profile Configuration</button>
                             </form>
+                            
+                            <form id="owner-change-password-form" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 30px; padding-top: 25px; border-top: 1px dashed var(--border-color);">
+                                <h3 style="font-size: 1.1rem; margin-bottom: 5px; color: var(--text-main);"><i class="fa-solid fa-lock" style="color: var(--secondary);"></i> Update Password</h3>
+                                <div class="form-group">
+                                    <label>Current Password</label>
+                                    <input type="password" id="owner-change-pwd-old" class="glass-input" required placeholder="••••••••">
+                                </div>
+                                <div class="form-group">
+                                    <label>New Password</label>
+                                    <input type="password" id="owner-change-pwd-new" class="glass-input" required placeholder="••••••••">
+                                </div>
+                                <div class="form-group">
+                                    <label>Confirm New Password</label>
+                                    <input type="password" id="owner-change-pwd-confirm" class="glass-input" required placeholder="••••••••">
+                                </div>
+                                <button type="submit" class="btn-premium" style="margin-top: 10px; background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary);">Update Password</button>
+                            </form>
+                        </div>
+                    </div>
+
+                    <!-- View Pane 4: Customer Reviews Wall -->
+                    <div id="owner-pane-reviews" class="owner-panel-pane" style="display: none;">
+                        <div class="glass-panel" style="padding: 30px;">
+                            <div class="section-header" style="margin-top: 0; margin-bottom: 25px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                                <div>
+                                    <h2 style="font-size: 1.6rem; font-weight: 700;"><i class="fa-solid fa-star" style="color: var(--accent); margin-right: 8px;"></i>Customer Reviews Wall</h2>
+                                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 4px;">Real-time satisfaction ratings and comments from neighborhood buyers</p>
+                                </div>
+                                <div style="display: flex; align-items: center; gap: 15px; background: rgba(255, 255, 255, 0.02); padding: 10px 20px; border-radius: 12px; border: 1px solid var(--border-color);">
+                                    <div style="font-size: 2.2rem; font-weight: 800; color: var(--accent); font-family: var(--font-heading);" id="owner-reviews-avg-rating">5.0</div>
+                                    <div>
+                                        <div style="color: var(--accent); font-size: 0.85rem;" id="owner-reviews-stars-visual">★★★★★</div>
+                                        <div style="font-size: 0.75rem; color: var(--text-muted); font-weight: 500;" id="owner-reviews-count">0 reviews</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <div id="owner-reviews-list" style="display: flex; flex-direction: column; gap: 16px;">
+                                <!-- Loaded dynamically -->
+                            </div>
                         </div>
                     </div>
 
@@ -328,6 +393,23 @@
                         <input type="number" id="prod-stock" class="glass-input" required placeholder="50">
                     </div>
                 </div>
+                <div class="form-group" style="margin-top: 10px; margin-bottom: 10px;">
+                    <label style="display: flex; align-items: center; gap: 8px; font-weight: 600; cursor: pointer;">
+                        <input type="checkbox" id="prod-has-variants" style="width: 16px; height: 16px; accent-color: var(--primary);"> This product has multiple size/weight variants
+                    </label>
+                </div>
+
+                <!-- Variants Widget Section -->
+                <div id="prod-variants-section" style="display: none; border-top: 1px dashed var(--border-color); padding-top: 15px; margin-top: 15px; margin-bottom: 15px;">
+                    <h4 style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 10px; display: flex; justify-content: space-between; align-items: center;">
+                        <span>Product Variants</span>
+                        <button type="button" class="btn-premium" id="btn-add-variant-row" style="padding: 4px 10px; font-size: 0.75rem;"><i class="fa-solid fa-plus"></i> Add Variant</button>
+                    </h4>
+                    <div id="variants-rows-container" style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 10px;">
+                        <!-- Dynamically filled with variant input rows -->
+                    </div>
+                </div>
+
                 <div class="form-group">
                     <label>Product Image</label>
                     <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
@@ -407,6 +489,74 @@
                     <input type="text" id="reg-store-address" class="glass-input" required placeholder="Shop number, floor, locality, City">
                 </div>
                 <button type="submit" class="btn-premium" style="width: 100%; margin-top: 10px;">Initialize Storefront</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Forgot Password Reset Modal -->
+    <div class="modal-overlay" id="modal-merchant-forgot-password" style="display: none; z-index: 3200;">
+        <div class="modal-content glass-panel" style="max-width: 400px; padding: 32px; position: relative;">
+            <button class="btn-icon" id="btn-close-merchant-forgot-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.2rem; color: var(--secondary); margin-bottom: 8px;"><i class="fa-solid fa-key"></i></div>
+                <h3>Reset Merchant Password</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Enter your email to receive a recovery OTP code</p>
+            </div>
+            
+            <!-- Step 1: Input Email -->
+            <form id="form-merchant-forgot-request" style="display: flex; flex-direction: column; gap: 15px;">
+                <div class="form-group">
+                    <label for="merchant-forgot-email">Email Address</label>
+                    <input type="email" id="merchant-forgot-email" class="glass-input" required placeholder="you@luxe.com" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 10px;">Send Recovery OTP</button>
+            </form>
+
+            <!-- Step 2: Input OTP & New Password -->
+            <form id="form-merchant-forgot-reset" style="display: none; flex-direction: column; gap: 15px;">
+                <div class="form-group">
+                    <label for="merchant-forgot-otp">Verification OTP Code</label>
+                    <input type="text" id="merchant-forgot-otp" class="glass-input" required placeholder="OTP Code" style="width: 100%; text-align: center; font-family: monospace; letter-spacing: 2px;">
+                </div>
+                <div class="form-group">
+                    <label for="merchant-forgot-new-password">New Password</label>
+                    <input type="password" id="merchant-forgot-new-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 10px; background: var(--secondary); border-color: var(--secondary);">Reset Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Merchant Account Settings Modal -->
+    <div class="modal-overlay" id="modal-merchant-profile" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; padding: 32px; position: relative;">
+            <button type="button" class="btn-icon" id="btn-close-merchant-profile-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: transparent; border: none; color: var(--text-muted); cursor: pointer;">
+                <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+            </button>
+            <div style="margin-bottom: 24px; border-bottom: 1px solid var(--border-color); padding-bottom: 18px; text-align: center;">
+                <div style="width: 60px; height: 60px; border-radius: 50%; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 1.4rem; color: var(--text-dark); margin: 0 auto 12px auto; text-shadow: 0 1px 1px rgba(255,255,255,0.2);" id="merchant-profile-avatar">M</div>
+                <h3 id="merchant-profile-name" style="font-size: 1.2rem; font-weight: 700; color: var(--text-main);">Merchant Partner</h3>
+                <p id="merchant-profile-email" style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">partner@luxegrocer.com</p>
+                <span style="font-size: 0.75rem; background: rgba(16, 185, 129, 0.1); color: var(--primary); padding: 2px 8px; border-radius: 4px; font-weight: 600; margin-top: 8px; display: inline-block;">Merchant Account</span>
+            </div>
+            
+            <form id="merchant-profile-change-password-form" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;">
+                <h4 style="font-size: 0.95rem; color: var(--text-main); margin-bottom: 5px;"><i class="fa-solid fa-lock" style="color: var(--secondary); margin-right: 6px;"></i> Update Password</h4>
+                <div class="form-group">
+                    <label>Current Password</label>
+                    <input type="password" id="merchant-profile-pwd-old" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <div class="form-group">
+                    <label>New Password</label>
+                    <input type="password" id="merchant-profile-pwd-new" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <div class="form-group">
+                    <label>Confirm New Password</label>
+                    <input type="password" id="merchant-profile-pwd-confirm" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; margin-top: 5px; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-color: var(--primary);">Save Password</button>
             </form>
         </div>
     </div>

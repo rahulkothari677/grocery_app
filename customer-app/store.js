@@ -108,7 +108,13 @@ class LuxeStore {
 
     // --- User Location Methods (Kept local to browser session) ---
     getUserLocation() {
-        return JSON.parse(localStorage.getItem('luxegrocer_user_location'));
+        try {
+            const loc = localStorage.getItem('luxegrocer_user_location');
+            if (loc) return JSON.parse(loc);
+        } catch (e) {
+            console.error("Error reading user location from localStorage:", e);
+        }
+        return USER_LOCATION;
     }
 
     setUserLocation(lat, lng, address) {
@@ -132,6 +138,15 @@ class LuxeStore {
 
     deg2rad(deg) {
         return deg * (Math.PI / 180);
+    }
+
+    getDeliveryFee(distance, subtotal) {
+        if (subtotal >= 300) return 0.00; // Free delivery threshold
+        let fee = 20.00; // base fee for first 2 km
+        if (distance > 2) {
+            fee += Math.ceil(distance - 2) * 10.00; // +10 per additional km
+        }
+        return fee;
     }
 
     // --- Store Methods (API Backend) ---
@@ -304,15 +319,20 @@ class LuxeStore {
         return orders.find(o => o.id === orderId);
     }
 
-    async createOrder(storeId, cartItems, customerDetails) {
+    async createOrder(storeId, cartItems, customerDetails, discount = 0, voucherCode = '') {
         try {
             const store = await this.getStoreById(storeId);
             if (!store) return null;
             
+            const subtotal = cartItems.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const deliveryFee = this.getDeliveryFee(store.distance, subtotal);
+
             const payload = {
                 storeId,
                 items: cartItems,
-                deliveryFee: store.distance <= 2 ? 15.00 : 35.00,
+                deliveryFee,
+                discount,
+                voucherCode,
                 customer: customerDetails
             };
             
@@ -359,6 +379,76 @@ class LuxeStore {
         } catch (err) {
             console.error("API error verifying OTP:", err);
             return { success: false, msg: 'Server connection error.' };
+        }
+    }
+
+    async getSavedAddresses() {
+        try {
+            const res = await fetch(`${this.baseUrl}/users/addresses`, {
+                headers: this.getHeaders()
+            });
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (err) {
+            console.error("API error fetching saved addresses:", err);
+            return [];
+        }
+    }
+
+    async addSavedAddress(addressData) {
+        try {
+            const res = await fetch(`${this.baseUrl}/users/addresses`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(addressData)
+            });
+            if (!res.ok) return null;
+            return await res.json();
+        } catch (err) {
+            console.error("API error adding address:", err);
+            return null;
+        }
+    }
+
+    async deleteSavedAddress(addressId) {
+        try {
+            const res = await fetch(`${this.baseUrl}/users/addresses/${addressId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+            return res.ok;
+        } catch (err) {
+            console.error("API error deleting address:", err);
+            return false;
+        }
+    }
+
+    async getVouchers() {
+        try {
+            const res = await fetch(`${this.baseUrl}/vouchers`);
+            if (!res.ok) return [];
+            return await res.json();
+        } catch (err) {
+            console.error("API error fetching vouchers:", err);
+            return [];
+        }
+    }
+
+    async validateVoucher(code, subtotal) {
+        try {
+            const res = await fetch(`${this.baseUrl}/vouchers/validate`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ code, subtotal })
+            });
+            const data = await res.json();
+            if (!res.ok) {
+                return { success: false, error: data.error || 'Validation failed' };
+            }
+            return { success: true, voucher: data.voucher };
+        } catch (err) {
+            console.error("API error validating voucher:", err);
+            return { success: false, error: 'Connection failed' };
         }
     }
 

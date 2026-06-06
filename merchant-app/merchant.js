@@ -4,6 +4,7 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Application State ---
     let ownedStoreId = null;
     let activeOwnerPane = 'analytics'; // Default pane
+    let activeOrdersTab = 'active'; // 'active' or 'past'
 
     // Custom uploads temporary Base64 states
     let regStoreCustomBannerBase64 = null;
@@ -22,12 +23,18 @@ document.addEventListener('DOMContentLoaded', () => {
         btnOwnerNavAnalytics: document.getElementById('btn-owner-nav-analytics'),
         btnOwnerNavOrders: document.getElementById('btn-owner-nav-orders'),
         btnOwnerNavInventory: document.getElementById('btn-owner-nav-inventory'),
+        btnOwnerNavReviews: document.getElementById('btn-owner-nav-reviews'),
         btnOwnerNavSettings: document.getElementById('btn-owner-nav-settings'),
         
         ownerPaneAnalytics: document.getElementById('owner-pane-analytics'),
         ownerPaneOrders: document.getElementById('owner-pane-orders'),
         ownerPaneInventory: document.getElementById('owner-pane-inventory'),
+        ownerPaneReviews: document.getElementById('owner-pane-reviews'),
         ownerPaneSettings: document.getElementById('owner-pane-settings'),
+        ownerReviewsAvgRating: document.getElementById('owner-reviews-avg-rating'),
+        ownerReviewsStarsVisual: document.getElementById('owner-reviews-stars-visual'),
+        ownerReviewsCount: document.getElementById('owner-reviews-count'),
+        ownerReviewsList: document.getElementById('owner-reviews-list'),
         
         btnTestSoundbox: document.getElementById('btn-test-soundbox'),
         ownerStatRevenue: document.getElementById('owner-stat-revenue'),
@@ -64,6 +71,10 @@ document.addEventListener('DOMContentLoaded', () => {
         prodDesc: document.getElementById('prod-desc'),
         prodImageFile: document.getElementById('prod-image-file'),
         prodImagePreview: document.getElementById('prod-image-preview'),
+        prodHasVariants: document.getElementById('prod-has-variants'),
+        prodVariantsSection: document.getElementById('prod-variants-section'),
+        btnAddVariantRow: document.getElementById('btn-add-variant-row'),
+        variantsRowsContainer: document.getElementById('variants-rows-container'),
 
         modalRegisterStoreElement: document.getElementById('modal-register-store-element'),
         btnCloseRegisterModal: document.getElementById('btn-close-register-modal'),
@@ -77,7 +88,6 @@ document.addEventListener('DOMContentLoaded', () => {
         regStoreBannerPreview: document.getElementById('reg-store-banner-preview'),
         regStoreAddress: document.getElementById('reg-store-address'),
         regStoreMov: document.getElementById('reg-store-mov'),
-        regStorePrepTime: document.getElementById('reg-store-prep-time'),
 
         // Toast
         toastNotification: document.getElementById('toast-notification'),
@@ -98,7 +108,38 @@ document.addEventListener('DOMContentLoaded', () => {
         merchantRegAddress: document.getElementById('merchant-reg-address'),
         linkMerchantToRegister: document.getElementById('link-merchant-to-register'),
         linkMerchantToLogin: document.getElementById('link-merchant-to-login'),
-        btnMerchantLogout: document.getElementById('btn-merchant-logout')
+        btnMerchantLogout: document.getElementById('btn-merchant-logout'),
+        btnMerchantActiveOrdersTab: document.getElementById('btn-merchant-active-orders-tab'),
+        btnMerchantPastOrdersTab: document.getElementById('btn-merchant-past-orders-tab'),
+        btnToggleStoreStatus: document.getElementById('btn-toggle-store-status'),
+
+        // Password Recovery
+        linkMerchantForgotPassword: document.getElementById('link-merchant-forgot-password'),
+        modalMerchantForgotPassword: document.getElementById('modal-merchant-forgot-password'),
+        btnCloseMerchantForgotModal: document.getElementById('btn-close-merchant-forgot-modal'),
+        formMerchantForgotRequest: document.getElementById('form-merchant-forgot-request'),
+        formMerchantForgotReset: document.getElementById('form-merchant-forgot-reset'),
+        merchantForgotEmail: document.getElementById('merchant-forgot-email'),
+        merchantForgotOtp: document.getElementById('merchant-forgot-otp'),
+        merchantForgotNewPassword: document.getElementById('merchant-forgot-new-password'),
+
+        // Profile Password Change
+        ownerChangePasswordForm: document.getElementById('owner-change-password-form'),
+        ownerChangePwdOld: document.getElementById('owner-change-pwd-old'),
+        ownerChangePwdNew: document.getElementById('owner-change-pwd-new'),
+        ownerChangePwdConfirm: document.getElementById('owner-change-pwd-confirm'),
+
+        // Unified Profile Modal Settings
+        btnMerchantProfile: document.getElementById('btn-merchant-profile'),
+        modalMerchantProfile: document.getElementById('modal-merchant-profile'),
+        btnCloseMerchantProfileModal: document.getElementById('btn-close-merchant-profile-modal'),
+        merchantProfileAvatar: document.getElementById('merchant-profile-avatar'),
+        merchantProfileName: document.getElementById('merchant-profile-name'),
+        merchantProfileEmail: document.getElementById('merchant-profile-email'),
+        merchantProfileChangePasswordForm: document.getElementById('merchant-profile-change-password-form'),
+        merchantProfilePwdOld: document.getElementById('merchant-profile-pwd-old'),
+        merchantProfilePwdNew: document.getElementById('merchant-profile-pwd-new'),
+        merchantProfilePwdConfirm: document.getElementById('merchant-profile-pwd-confirm')
     };
 
     // --- Toast Notifications ---
@@ -250,6 +291,97 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    async function handleOwnerChangePassword(e) {
+        e.preventDefault();
+        const oldPassword = elements.ownerChangePwdOld.value;
+        const newPassword = elements.ownerChangePwdNew.value;
+        const confirmPassword = elements.ownerChangePwdConfirm.value;
+
+        if (newPassword !== confirmPassword) {
+            showToast("New passwords do not match!", "error");
+            return;
+        }
+
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/change-password`, {
+                method: 'PUT',
+                headers: db.getHeaders(),
+                body: JSON.stringify({ oldPassword, newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Password updated successfully!", "success");
+                elements.ownerChangePasswordForm.reset();
+            } else {
+                showToast(data.error || "Failed to update password", "error");
+            }
+        } catch (err) {
+            console.error("Error changing password:", err);
+            showToast("Network connection error", "error");
+        }
+    }
+
+    async function handleMerchantForgotRequestSubmit(e) {
+        e.preventDefault();
+        const email = elements.merchantForgotEmail.value.trim();
+        
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/forgot-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Reset code sent! Check console / alert.", "success");
+                alert(`[MOCK EMAIL SERVICE]\nTo: ${email}\nYour LuxeGrocer password reset code is: ${data.otp}`);
+                
+                elements.formMerchantForgotRequest.style.display = 'none';
+                elements.formMerchantForgotReset.style.display = 'flex';
+                elements.merchantForgotOtp.value = '';
+                elements.merchantForgotNewPassword.value = '';
+            } else {
+                showToast(data.error || "Password reset request failed", "error");
+            }
+        } catch (err) {
+            console.error("Forgot password request error:", err);
+            showToast("Network connection error", "error");
+        }
+    }
+
+    async function handleMerchantForgotResetSubmit(e) {
+        e.preventDefault();
+        const email = elements.merchantForgotEmail.value.trim();
+        const otp = elements.merchantForgotOtp.value.trim();
+        const newPassword = elements.merchantForgotNewPassword.value;
+
+        try {
+            const res = await fetch(`${db.baseUrl}/auth/reset-password`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email, otp, newPassword })
+            });
+            const data = await res.json();
+            if (res.ok) {
+                showToast("Password has been reset successfully!", "success");
+                
+                elements.modalMerchantForgotPassword.style.display = 'none';
+                elements.modalMerchantForgotPassword.classList.remove('active');
+                
+                // Show login form
+                elements.formMerchantLogin.style.display = 'flex';
+                elements.formMerchantRegister.style.display = 'none';
+                document.getElementById('merchant-auth-title').innerText = "Partner Portal";
+                document.getElementById('merchant-auth-subtitle').innerText = "Access your digital shelf manager & deliveries console";
+            } else {
+                showToast(data.error || "Reset password failed", "error");
+            }
+        } catch (err) {
+            console.error("Reset password error:", err);
+            showToast("Network connection error", "error");
+        }
+    }
+
     // --- Merchant View Controller ---
     async function loadOwnerPortal() {
         const user = await db.loadCurrentUser();
@@ -259,12 +391,14 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.ownerNoStoreAlert.style.display = 'none';
             elements.ownerDashboardWorkspace.style.display = 'none';
             elements.btnMerchantLogout.style.display = 'none';
+            if (elements.btnMerchantProfile) elements.btnMerchantProfile.style.display = 'none';
             return;
         }
         
         elements.merchantAuthWorkspace.style.display = 'none';
         elements.btnMerchantLogout.style.display = 'inline-flex';
         elements.btnMerchantLogout.innerText = `Sign Out (${user.name.split(' ')[0]})`;
+        if (elements.btnMerchantProfile) elements.btnMerchantProfile.style.display = 'inline-flex';
         
         ownedStoreId = user.storeId || null;
         
@@ -301,6 +435,18 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.settingsStoreBannerFile.value = '';
             settingsStoreCustomBannerBase64 = store.image; // Keep existing
 
+            // Update Store Status toggle UI button
+            const status = store.status || 'Open';
+            if (status === 'Closed') {
+                elements.btnToggleStoreStatus.innerText = "🔴 Closed / Offline";
+                elements.btnToggleStoreStatus.style.background = "#ef4444";
+                elements.btnToggleStoreStatus.style.borderColor = "#ef4444";
+            } else {
+                elements.btnToggleStoreStatus.innerText = "🟢 Open for Delivery";
+                elements.btnToggleStoreStatus.style.background = "#10b981";
+                elements.btnToggleStoreStatus.style.borderColor = "#10b981";
+            }
+
             await showOwnerPanel(activeOwnerPane);
         }
     }
@@ -309,11 +455,13 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.btnOwnerNavAnalytics.classList.remove('active');
         elements.btnOwnerNavOrders.classList.remove('active');
         elements.btnOwnerNavInventory.classList.remove('active');
+        elements.btnOwnerNavReviews.classList.remove('active');
         elements.btnOwnerNavSettings.classList.remove('active');
 
         elements.ownerPaneAnalytics.style.display = 'none';
         elements.ownerPaneOrders.style.display = 'none';
         elements.ownerPaneInventory.style.display = 'none';
+        elements.ownerPaneReviews.style.display = 'none';
         elements.ownerPaneSettings.style.display = 'none';
 
         if (paneName === 'analytics') {
@@ -328,6 +476,10 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.btnOwnerNavInventory.classList.add('active');
             elements.ownerPaneInventory.style.display = 'block';
             await renderOwnerInventory();
+        } else if (paneName === 'reviews') {
+            elements.btnOwnerNavReviews.classList.add('active');
+            elements.ownerPaneReviews.style.display = 'block';
+            await renderMerchantReviews();
         } else {
             elements.btnOwnerNavSettings.classList.add('active');
             elements.ownerPaneSettings.style.display = 'block';
@@ -412,9 +564,17 @@ document.addEventListener('DOMContentLoaded', () => {
     async function renderOwnerOrders() {
         elements.ownerOrdersQueueList.innerHTML = '';
         const allOrders = await db.getOrders();
-        const storeOrders = allOrders.filter(o => o.storeId === ownedStoreId);
+        let storeOrders = allOrders.filter(o => o.storeId === ownedStoreId);
 
+        // Sort descending
         storeOrders.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        // Filter based on active vs past tab
+        if (activeOrdersTab === 'active') {
+            storeOrders = storeOrders.filter(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+        } else {
+            storeOrders = storeOrders.filter(o => o.status === 'Delivered' || o.status === 'Cancelled');
+        }
 
         if (storeOrders.length === 0) {
             elements.ownerOrdersQueueList.innerHTML = `
@@ -576,6 +736,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<img src="${prod.image}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px;">`
                 : `<span style="font-size: 1.5rem;">${emoji}</span>`;
             
+            let variantsHtml = '';
+            if (prod.variants && prod.variants.length > 0) {
+                variantsHtml = `
+                    <div class="inventory-variants-list" style="margin-top: 6px; padding-left: 10px; border-left: 2px solid var(--primary); font-size: 0.8rem; color: var(--text-muted); text-align: left;">
+                        ${prod.variants.map(v => `<div>• ${v.name}: <strong>₹${v.price.toFixed(2)}</strong> (${v.stock} items)</div>`).join('')}
+                    </div>
+                `;
+            }
+
+            const totalStock = prod.variants && prod.variants.length > 0 
+                ? prod.variants.reduce((sum, v) => sum + v.stock, 0) 
+                : prod.stock;
+
             tr.innerHTML = `
                 <td>
                     <div style="display:flex; align-items:center; gap:10px;">
@@ -583,15 +756,17 @@ document.addEventListener('DOMContentLoaded', () => {
                         <div>
                             <strong>${prod.name}</strong>
                             <br><span style="font-size: 0.75rem; color: var(--text-muted);">${prod.desc || 'No description.'}</span>
+                            ${variantsHtml}
                         </div>
                     </div>
                 </td>
                 <td><span style="text-transform: capitalize;">${prod.category}</span></td>
-                <td><strong>₹${prod.price.toFixed(2)}</strong></td>
-                <td>${prod.unit}</td>
-                <td><span class="${prod.stock > 0 ? 'product-stock-tag in-stock' : 'product-stock-tag out-stock'}">${prod.stock} items</span></td>
+                <td><strong>${prod.variants && prod.variants.length > 0 ? 'Multiple' : `₹${prod.price.toFixed(2)}`}</strong></td>
+                <td>${prod.variants && prod.variants.length > 0 ? '-' : prod.unit}</td>
+                <td><span class="${totalStock > 0 ? 'product-stock-tag in-stock' : 'product-stock-tag out-stock'}">${totalStock} items</span></td>
                 <td>
                     <div style="display:flex; gap: 8px;">
+                        <button class="btn-icon toggle-stock-btn" style="width:32px; height:32px; border-color:var(--secondary); color:var(--secondary);" title="Toggle Stock (Quick 0/20)"><i class="fa-solid fa-arrows-rotate" style="font-size:0.8rem;"></i></button>
                         <button class="btn-icon edit-prod-btn" style="width:32px; height:32px;" title="Edit Product"><i class="fa-solid fa-pencil" style="font-size:0.8rem;"></i></button>
                         <button class="btn-icon delete-prod-btn" style="width:32px; height:32px; border-color:rgba(239, 68, 68, 0.2); color:var(--danger);" title="Delete Product"><i class="fa-solid fa-trash-can" style="font-size:0.8rem;"></i></button>
                     </div>
@@ -606,8 +781,113 @@ document.addEventListener('DOMContentLoaded', () => {
                     await renderOwnerInventory();
                 }
             });
+            tr.querySelector('.toggle-stock-btn').addEventListener('click', async () => {
+                let updatedStock;
+                let updatedVariants = null;
+
+                if (prod.variants && prod.variants.length > 0) {
+                    const currentTotal = prod.variants.reduce((sum, v) => sum + v.stock, 0);
+                    updatedStock = currentTotal > 0 ? 0 : 20 * prod.variants.length;
+                    updatedVariants = prod.variants.map(v => ({
+                        ...v,
+                        stock: currentTotal > 0 ? 0 : 20
+                    }));
+                } else {
+                    updatedStock = prod.stock > 0 ? 0 : 20;
+                }
+
+                const payload = {
+                    ...prod,
+                    stock: updatedStock
+                };
+                if (updatedVariants) {
+                    payload.variants = updatedVariants;
+                }
+
+                await db.updateProduct(ownedStoreId, prod.id, payload);
+                showToast(`Stock levels set to ${updatedStock > 0 ? 'In Stock' : 'Out of Stock'}.`);
+                await renderOwnerInventory();
+            });
 
             elements.ownerInventoryTableBody.appendChild(tr);
+        });
+    }
+
+    async function renderMerchantReviews() {
+        elements.ownerReviewsList.innerHTML = '';
+        const store = await db.getStoreById(ownedStoreId);
+        if (!store) return;
+
+        const ratingVal = store.rating !== undefined ? parseFloat(store.rating) : 5.0;
+        const reviewsCount = store.reviewsCount || 0;
+
+        elements.ownerReviewsAvgRating.innerText = ratingVal.toFixed(1);
+        
+        // Stars visual
+        const roundedStars = Math.round(ratingVal);
+        elements.ownerReviewsStarsVisual.innerText = '★'.repeat(roundedStars) + '☆'.repeat(5 - roundedStars);
+        elements.ownerReviewsCount.innerText = `${reviewsCount} ${reviewsCount === 1 ? 'review' : 'reviews'}`;
+
+        const reviews = store.reviews || [];
+
+        if (reviews.length === 0) {
+            elements.ownerReviewsList.innerHTML = `
+                <div class="glass-card" style="padding: 40px; text-align: center; color: var(--text-muted); border-radius: 16px;">
+                    <i class="fa-solid fa-comments" style="font-size: 3rem; margin-bottom: 16px; color: var(--text-muted); opacity: 0.5;"></i>
+                    <h3>No customer feedback yet</h3>
+                    <p style="margin-top: 8px; font-size: 0.85rem;">Reviews from doorstep delivery completions will appear here.</p>
+                </div>
+            `;
+            return;
+        }
+
+        // Sort descending (newest first)
+        const sortedReviews = [...reviews].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+        sortedReviews.forEach(rev => {
+            const card = document.createElement('div');
+            card.className = 'glass-card';
+            card.style.padding = '20px';
+            card.style.marginBottom = '16px';
+            card.style.display = 'flex';
+            card.style.flexDirection = 'column';
+            card.style.gap = '12px';
+
+            const formattedTime = new Date(rev.timestamp).toLocaleString(undefined, {
+                year: 'numeric',
+                month: 'short',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            // Get Initials
+            const nameParts = (rev.userName || 'Customer').split(' ');
+            const initials = nameParts.map(n => n.charAt(0).toUpperCase()).slice(0, 2).join('');
+
+            const stars = '★'.repeat(rev.rating) + '☆'.repeat(5 - rev.rating);
+
+            card.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 10px;">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.9rem; color: var(--text-dark); text-shadow: 0 1px 1px rgba(255,255,255,0.2);">
+                            ${initials}
+                        </div>
+                        <div>
+                            <strong style="color: var(--text-main); font-size: 0.95rem;">${rev.userName || 'Customer'}</strong>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">${formattedTime}</div>
+                        </div>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: flex-end; gap: 2px;">
+                        <div style="color: var(--accent); font-size: 0.95rem; font-weight: bold; letter-spacing: 1px;">${stars}</div>
+                        <span style="font-size: 0.75rem; background: rgba(245, 158, 11, 0.1); color: var(--accent); padding: 2px 8px; border-radius: 4px; font-weight: 600;">${rev.rating.toFixed(1)} / 5.0</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.9rem; line-height: 1.5; color: rgba(255, 255, 255, 0.95); background: rgba(255,255,255,0.01); border: 1px solid rgba(255,255,255,0.02); padding: 12px 16px; border-radius: 8px;">
+                    ${rev.comment ? rev.comment : '<em style="color: var(--text-muted); font-size: 0.85rem;">No written comment left.</em>'}
+                </div>
+            `;
+            elements.ownerReviewsList.appendChild(card);
         });
     }
 
@@ -638,17 +918,77 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function addVariantRow(variant = null) {
+        const row = document.createElement('div');
+        row.className = 'variant-row';
+        row.style.display = 'flex';
+        row.style.gap = '10px';
+        row.style.alignItems = 'center';
+        row.style.marginBottom = '8px';
+
+        const nameVal = variant ? variant.name : '';
+        const priceVal = variant ? variant.price : '';
+        const stockVal = variant ? variant.stock : '';
+        const vId = variant ? variant.id : 'v-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
+
+        row.innerHTML = `
+            <input type="hidden" class="variant-id" value="${vId}">
+            <input type="text" class="glass-input variant-name" required placeholder="Size/Unit (e.g. 500ml)" style="flex: 2; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${nameVal}">
+            <input type="number" step="0.01" class="glass-input variant-price" required placeholder="Price (₹)" style="flex: 1; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${priceVal}">
+            <input type="number" class="glass-input variant-stock" required placeholder="Stock" style="flex: 1; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${stockVal}">
+            <button type="button" class="btn-icon btn-remove-variant-row" style="width: 36px; height: 36px; color: var(--danger); border-color: rgba(239, 68, 68, 0.2); flex-shrink: 0;" title="Remove Option"><i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i></button>
+        `;
+
+        row.querySelector('.btn-remove-variant-row').addEventListener('click', () => {
+            row.remove();
+        });
+
+        elements.variantsRowsContainer.appendChild(row);
+    }
+
     async function saveProductFromForm(e) {
         e.preventDefault();
         
+        const hasVariants = elements.prodHasVariants.checked;
+        let price = 0;
+        let stock = 0;
+        let unit = '';
+        let variants = null;
+
+        if (hasVariants) {
+            const rows = elements.variantsRowsContainer.querySelectorAll('.variant-row');
+            if (rows.length === 0) {
+                showToast("Please add at least one variant option.", "error");
+                return;
+            }
+            variants = [];
+            rows.forEach((row, idx) => {
+                const vId = row.querySelector('.variant-id').value;
+                const name = row.querySelector('.variant-name').value.trim();
+                const p = parseFloat(row.querySelector('.variant-price').value) || 0.0;
+                const s = parseInt(row.querySelector('.variant-stock').value) || 0;
+                variants.push({ id: vId, name, price: p, stock: s });
+                stock += s;
+                if (idx === 0) {
+                    price = p;
+                    unit = name;
+                }
+            });
+        } else {
+            price = parseFloat(elements.prodPrice.value);
+            unit = elements.prodUnit.value.trim();
+            stock = parseInt(elements.prodStock.value);
+        }
+
         const prodData = {
             name: elements.prodName.value.trim(),
             category: elements.prodCategory.value,
-            price: parseFloat(elements.prodPrice.value),
-            unit: elements.prodUnit.value.trim(),
-            stock: parseInt(elements.prodStock.value),
+            price,
+            unit,
+            stock,
             desc: elements.prodDesc.value.trim(),
-            image: prodCustomImageBase64 || ''
+            image: prodCustomImageBase64 || '',
+            variants
         };
 
         const pId = elements.modalProductId.value;
@@ -671,17 +1011,39 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.ownerProductForm.reset();
         prodCustomImageBase64 = null;
         elements.prodImageFile.value = '';
+        elements.variantsRowsContainer.innerHTML = '';
         
         if (product) {
             elements.modalProductTitle.innerText = "Edit Product Listing";
             elements.modalProductId.value = product.id;
             elements.prodName.value = product.name;
             elements.prodCategory.value = product.category;
-            elements.prodPrice.value = product.price;
-            elements.prodUnit.value = product.unit;
-            elements.prodStock.value = product.stock;
+            elements.prodPrice.value = product.price || '';
+            elements.prodUnit.value = product.unit || '';
+            elements.prodStock.value = product.stock || '';
             elements.prodDesc.value = product.desc || '';
             
+            if (product.variants && product.variants.length > 0) {
+                elements.prodHasVariants.checked = true;
+                elements.prodVariantsSection.style.display = 'block';
+                elements.prodPrice.disabled = true;
+                elements.prodUnit.disabled = true;
+                elements.prodStock.disabled = true;
+                elements.prodPrice.removeAttribute('required');
+                elements.prodUnit.removeAttribute('required');
+                elements.prodStock.removeAttribute('required');
+                product.variants.forEach(v => addVariantRow(v));
+            } else {
+                elements.prodHasVariants.checked = false;
+                elements.prodVariantsSection.style.display = 'none';
+                elements.prodPrice.disabled = false;
+                elements.prodUnit.disabled = false;
+                elements.prodStock.disabled = false;
+                elements.prodPrice.setAttribute('required', '');
+                elements.prodUnit.setAttribute('required', '');
+                elements.prodStock.setAttribute('required', '');
+            }
+
             if (product.image && product.image.trim() !== '') {
                 elements.prodImagePreview.innerHTML = `<img src="${product.image}" style="width: 100%; height: 100%; object-fit: cover;">`;
                 prodCustomImageBase64 = product.image;
@@ -691,6 +1053,14 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             elements.modalProductTitle.innerText = "Add New Product Listing";
             elements.modalProductId.value = "";
+            elements.prodHasVariants.checked = false;
+            elements.prodVariantsSection.style.display = 'none';
+            elements.prodPrice.disabled = false;
+            elements.prodUnit.disabled = false;
+            elements.prodStock.disabled = false;
+            elements.prodPrice.setAttribute('required', '');
+            elements.prodUnit.setAttribute('required', '');
+            elements.prodStock.setAttribute('required', '');
             elements.prodImagePreview.innerHTML = `<span style="font-size: 1.2rem; color: var(--text-muted);">📷</span>`;
         }
 
@@ -793,12 +1163,71 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnOwnerNavAnalytics.addEventListener('click', () => showOwnerPanel('analytics'));
     elements.btnOwnerNavOrders.addEventListener('click', () => showOwnerPanel('orders'));
     elements.btnOwnerNavInventory.addEventListener('click', () => showOwnerPanel('inventory'));
+    elements.btnOwnerNavReviews.addEventListener('click', () => showOwnerPanel('reviews'));
     elements.btnOwnerNavSettings.addEventListener('click', () => showOwnerPanel('settings'));
+
+    if (elements.btnMerchantActiveOrdersTab) {
+        elements.btnMerchantActiveOrdersTab.addEventListener('click', async () => {
+            activeOrdersTab = 'active';
+            elements.btnMerchantActiveOrdersTab.className = 'btn-premium';
+            elements.btnMerchantPastOrdersTab.className = 'btn-outline';
+            elements.btnMerchantPastOrdersTab.style.borderColor = 'var(--border-color)';
+            elements.btnMerchantPastOrdersTab.style.color = 'var(--text-muted)';
+            elements.btnMerchantActiveOrdersTab.style.borderColor = '';
+            elements.btnMerchantActiveOrdersTab.style.color = '';
+            await renderOwnerOrders();
+        });
+    }
+
+    if (elements.btnMerchantPastOrdersTab) {
+        elements.btnMerchantPastOrdersTab.addEventListener('click', async () => {
+            activeOrdersTab = 'past';
+            elements.btnMerchantPastOrdersTab.className = 'btn-premium';
+            elements.btnMerchantActiveOrdersTab.className = 'btn-outline';
+            elements.btnMerchantActiveOrdersTab.style.borderColor = 'var(--border-color)';
+            elements.btnMerchantActiveOrdersTab.style.color = 'var(--text-muted)';
+            elements.btnMerchantPastOrdersTab.style.borderColor = '';
+            elements.btnMerchantPastOrdersTab.style.color = '';
+            await renderOwnerOrders();
+        });
+    }
 
     elements.btnOpenAddProductModal.addEventListener('click', () => openAddEditProductModal());
     elements.btnCloseProductModal.addEventListener('click', () => elements.modalProductElement.classList.remove('active'));
     elements.ownerProductForm.addEventListener('submit', saveProductFromForm);
     elements.ownerSettingsForm.addEventListener('submit', saveStoreSettings);
+
+    if (elements.prodHasVariants) {
+        elements.prodHasVariants.addEventListener('change', () => {
+            const hasVariants = elements.prodHasVariants.checked;
+            if (hasVariants) {
+                elements.prodVariantsSection.style.display = 'block';
+                elements.prodPrice.disabled = true;
+                elements.prodUnit.disabled = true;
+                elements.prodStock.disabled = true;
+                elements.prodPrice.removeAttribute('required');
+                elements.prodUnit.removeAttribute('required');
+                elements.prodStock.removeAttribute('required');
+                if (elements.variantsRowsContainer.children.length === 0) {
+                    addVariantRow();
+                }
+            } else {
+                elements.prodVariantsSection.style.display = 'none';
+                elements.prodPrice.disabled = false;
+                elements.prodUnit.disabled = false;
+                elements.prodStock.disabled = false;
+                elements.prodPrice.setAttribute('required', '');
+                elements.prodUnit.setAttribute('required', '');
+                elements.prodStock.setAttribute('required', '');
+            }
+        });
+    }
+
+    if (elements.btnAddVariantRow) {
+        elements.btnAddVariantRow.addEventListener('click', () => {
+            addVariantRow();
+        });
+    }
 
     // Custom uploader input listeners
     elements.prodImageFile.addEventListener('change', (e) => {
@@ -830,6 +1259,113 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
     });
+
+    if (elements.btnToggleStoreStatus) {
+        elements.btnToggleStoreStatus.addEventListener('click', async () => {
+            if (!ownedStoreId) return;
+            const store = await db.getStoreById(ownedStoreId);
+            if (!store) return;
+            const currentStatus = store.status || 'Open';
+            const newStatus = currentStatus === 'Open' ? 'Closed' : 'Open';
+            
+            const updated = await db.updateStoreConfig(ownedStoreId, { status: newStatus });
+            if (updated) {
+                showToast(`Store status set to ${newStatus === 'Open' ? 'Open for Delivery' : 'Closed / Offline'}.`, "success");
+                await loadOwnerPortal();
+            } else {
+                showToast("Failed to update store status.", "error");
+            }
+        });
+    }
+
+    // Password change & recovery event listeners
+    if (elements.linkMerchantForgotPassword) {
+        elements.linkMerchantForgotPassword.addEventListener('click', (e) => {
+            e.preventDefault();
+            elements.formMerchantForgotRequest.style.display = 'flex';
+            elements.formMerchantForgotReset.style.display = 'none';
+            elements.modalMerchantForgotPassword.style.display = 'flex';
+            elements.modalMerchantForgotPassword.classList.add('active');
+        });
+    }
+
+    if (elements.btnCloseMerchantForgotModal) {
+        elements.btnCloseMerchantForgotModal.addEventListener('click', () => {
+            elements.modalMerchantForgotPassword.style.display = 'none';
+            elements.modalMerchantForgotPassword.classList.remove('active');
+        });
+    }
+
+    if (elements.formMerchantForgotRequest) {
+        elements.formMerchantForgotRequest.addEventListener('submit', handleMerchantForgotRequestSubmit);
+    }
+
+    if (elements.formMerchantForgotReset) {
+        elements.formMerchantForgotReset.addEventListener('submit', handleMerchantForgotResetSubmit);
+    }
+
+    if (elements.ownerChangePasswordForm) {
+        elements.ownerChangePasswordForm.addEventListener('submit', handleOwnerChangePassword);
+    }
+
+    // Account Settings Modal Listeners
+    if (elements.btnMerchantProfile) {
+        elements.btnMerchantProfile.addEventListener('click', async () => {
+            const user = await db.loadCurrentUser();
+            if (user) {
+                elements.merchantProfileName.innerText = user.name;
+                elements.merchantProfileEmail.innerText = user.email;
+                const nameParts = user.name.split(' ');
+                const initials = nameParts.map(n => n.charAt(0).toUpperCase()).slice(0, 2).join('');
+                elements.merchantProfileAvatar.innerText = initials || 'M';
+                
+                elements.merchantProfileChangePasswordForm.reset();
+                elements.modalMerchantProfile.style.display = 'flex';
+                elements.modalMerchantProfile.classList.add('active');
+            }
+        });
+    }
+
+    if (elements.btnCloseMerchantProfileModal) {
+        elements.btnCloseMerchantProfileModal.addEventListener('click', () => {
+            elements.modalMerchantProfile.style.display = 'none';
+            elements.modalMerchantProfile.classList.remove('active');
+        });
+    }
+
+    if (elements.merchantProfileChangePasswordForm) {
+        elements.merchantProfileChangePasswordForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const oldPassword = elements.merchantProfilePwdOld.value;
+            const newPassword = elements.merchantProfilePwdNew.value;
+            const confirmPassword = elements.merchantProfilePwdConfirm.value;
+
+            if (newPassword !== confirmPassword) {
+                showToast("New passwords do not match!", "error");
+                return;
+            }
+
+            try {
+                const res = await fetch(`${db.baseUrl}/auth/change-password`, {
+                    method: 'PUT',
+                    headers: db.getHeaders(),
+                    body: JSON.stringify({ oldPassword, newPassword })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast("Password updated successfully!", "success");
+                    elements.merchantProfileChangePasswordForm.reset();
+                    elements.modalMerchantProfile.style.display = 'none';
+                    elements.modalMerchantProfile.classList.remove('active');
+                } else {
+                    showToast(data.error || "Failed to update password", "error");
+                }
+            } catch (err) {
+                console.error("Error changing password:", err);
+                showToast("Network connection error", "error");
+            }
+        });
+    }
 
     elements.btnTestSoundbox.addEventListener('click', () => {
         playSoundbox("Payment of 250 rupees received on Luxe Grocer");

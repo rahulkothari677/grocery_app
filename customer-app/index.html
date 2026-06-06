@@ -35,6 +35,11 @@
                     <i class="fa-solid fa-user"></i> <span id="auth-trigger-text">Sign In</span>
                 </button>
 
+                <!-- Customer Account Drawer Toggle Button -->
+                <button class="btn-premium" id="btn-account-trigger" style="background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px;" title="My Profile, Orders, and Vouchers">
+                    <i class="fa-solid fa-circle-user"></i> <span id="account-trigger-text">My Account</span>
+                </button>
+
                 <!-- Track Active Order Button -->
                 <button class="btn-premium" id="btn-track-active-order" style="background: var(--accent); border-color: var(--accent); color: var(--text-dark); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px; font-weight: 700;" title="Track your active delivery order">
                     <i class="fa-solid fa-truck-fast"></i> Track Order
@@ -106,12 +111,42 @@
                 </div>
             </div>
 
+            <!-- Bookmarked Stores Section (Hidden by default, shown only when bookmarks exist) -->
+            <div id="favorites-carousel-container" style="display: none; margin-top: 25px; margin-bottom: 25px;">
+                <div class="section-header" style="margin-bottom: 12px;">
+                    <div>
+                        <h2><i class="fa-solid fa-heart" style="color: #f43f5e; margin-right: 8px;"></i> Your Bookmarked Stores</h2>
+                        <p>Quick access to your neighborhood favorites</p>
+                    </div>
+                </div>
+                <div class="favorites-carousel-wrapper" style="overflow-x: auto; white-space: nowrap; padding-bottom: 10px; display: flex; gap: 16px;" id="favorites-carousel-list">
+                    <!-- Favorited store cards injected dynamically -->
+                </div>
+            </div>
+
             <!-- Nearby Stores Section -->
             <div>
-                <div class="section-header">
+                <div class="section-header" style="flex-wrap: wrap; gap: 15px;">
                     <div>
                         <h2>Premium Neighborhood Stores</h2>
                         <p>Ordering directly from independent local merchants who deliver to your doorstep</p>
+                    </div>
+                    
+                    <!-- Landing Sorting and Filters Row -->
+                    <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                        <!-- Open Only Filter -->
+                        <button type="button" class="btn-outline filter-store-btn" id="btn-filter-open-only" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 20px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981; margin-right: 5px;"></i> Open Only</button>
+                        
+                        <!-- Sort select -->
+                        <div style="position: relative; display: flex; align-items: center;">
+                            <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 8px; font-weight: 500;">Sort:</span>
+                            <select id="select-store-sort" class="glass-input" style="padding: 6px 30px 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 20px; background: rgba(0,0,0,0.25); border: 1.5px solid var(--border-color); color: white; width: auto; height: auto;">
+                                <option value="distance">Nearest Distance</option>
+                                <option value="rating">Top Rated</option>
+                                <option value="delivery-fee">Lowest Delivery Fee</option>
+                                <option value="speed">Fastest Delivery</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 <div class="stores-grid" id="store-list-container">
@@ -228,8 +263,14 @@
                                 </select>
                             </div>
                         </div>
+                        <div class="form-group" id="checkout-address-select-group" style="display: none; margin-bottom: 15px;">
+                            <label>Select Delivery Address</label>
+                            <select id="checkout-address-select" class="glass-input" style="width: 100%;">
+                                <!-- Loaded dynamically -->
+                            </select>
+                        </div>
                         <div class="form-group">
-                            <label for="checkout-address">Delivery Address</label>
+                            <label for="checkout-address">Delivery Address Details</label>
                             <textarea id="checkout-address" class="glass-input" rows="3" required placeholder="Flat, Street, Landmark details..."></textarea>
                         </div>
                         
@@ -261,6 +302,20 @@
                             </div>
                         </div>
 
+                        <!-- Coupon Voucher Section -->
+                        <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px; margin-bottom: 15px;" id="coupon-container">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 8px;"><i class="fa-solid fa-ticket" style="color: var(--secondary);"></i> Apply Discount Voucher</h3>
+                            <div style="display: flex; gap: 10px;">
+                                <input type="text" id="coupon-code-input" class="glass-input" placeholder="Promo Code (e.g. LUXENEW)" style="flex-grow: 1; text-transform: uppercase;">
+                                <button type="button" class="btn-premium" id="btn-apply-coupon" style="padding: 10px 20px; font-size: 0.85rem; white-space: nowrap;">Apply</button>
+                            </div>
+                            <div id="coupon-applied-msg" style="font-size: 0.8rem; color: var(--primary); display: none; margin-top: 8px; font-weight: 500; justify-content: space-between; align-items: center;">
+                                <span>Code <strong id="applied-coupon-code">LUXENEW</strong> applied!</span>
+                                <button type="button" id="btn-remove-coupon" style="background: transparent; border: none; color: var(--danger); cursor: pointer; font-weight: bold;">Remove</button>
+                            </div>
+                            <div id="coupon-error-msg" style="font-size: 0.8rem; color: var(--danger); display: none; margin-top: 8px; font-weight: 500;"></div>
+                        </div>
+
                         <button type="submit" class="btn-premium" style="margin-top: 10px; font-size: 1.1rem; width: 100%;" id="btn-submit-order">Place Delivery Order</button>
                     </form>
                 </div>
@@ -279,6 +334,10 @@
                         <div class="cart-summary-row" id="checkout-rider-tip-row" style="display: none;">
                             <span>Rider Tip Support</span>
                             <span id="checkout-rider-tip-amount">₹0.00</span>
+                        </div>
+                        <div class="cart-summary-row" id="checkout-discount-row" style="display: none; color: var(--secondary);">
+                            <span>Voucher Discount</span>
+                            <span id="checkout-discount-amount">-₹0.00</span>
                         </div>
                         <div class="cart-summary-row">
                             <span>Direct Delivery Charge</span>
@@ -380,6 +439,130 @@
 
 
     <!-- MODALS AND DRAWERS -->
+
+    <!-- MODALS AND DRAWERS -->
+
+    <!-- Account Settings & Order History sliding Drawer -->
+    <div id="account-overlay-element" class="cart-overlay"></div>
+    <div id="account-drawer-element" class="cart-drawer" style="max-width: 500px;">
+        <div class="cart-header">
+            <h2><i class="fa-solid fa-circle-user" style="color: var(--secondary);"></i> My Account</h2>
+            <button class="btn-icon" id="btn-close-account"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        
+        <!-- Account navigation tabs -->
+        <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;">
+            <button class="account-tab-btn active" id="tab-btn-profile" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid var(--primary); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem;">Profile</button>
+            <button class="account-tab-btn" id="tab-btn-addresses" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Addresses</button>
+            <button class="account-tab-btn" id="tab-btn-history" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Orders</button>
+            <button class="account-tab-btn" id="tab-btn-vouchers" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Vouchers</button>
+        </div>
+
+        <!-- Tab Content areas -->
+        <div id="account-drawer-content" style="flex-grow: 1; overflow-y: auto; padding: 0 24px 24px 24px; display: flex; flex-direction: column; gap: 20px;">
+            
+            <!-- Tab 1: Profile Details -->
+            <div id="pane-account-profile" class="account-pane">
+                <form id="form-account-profile" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;">
+                    <div class="form-group">
+                        <label>Full Name</label>
+                        <input type="text" id="account-profile-name" class="glass-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <input type="tel" id="account-profile-phone" class="glass-input" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <input type="email" id="account-profile-email" class="glass-input" disabled style="opacity: 0.6; cursor: not-allowed;">
+                    </div>
+                    <button type="submit" class="btn-premium" style="width:100%; margin-top: 10px;">Update Profile</button>
+                </form>
+                
+                <form id="form-change-password" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 25px; padding-top: 20px; border-top: 1px dashed var(--border-color);">
+                    <h3 style="font-size: 1.05rem; margin-bottom: 5px; color: var(--text-main);"><i class="fa-solid fa-lock" style="color: var(--secondary);"></i> Update Password</h3>
+                    <div class="form-group">
+                        <label>Current Password</label>
+                        <input type="password" id="change-pwd-old" class="glass-input" required placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label>New Password</label>
+                        <input type="password" id="change-pwd-new" class="glass-input" required placeholder="••••••••">
+                    </div>
+                    <div class="form-group">
+                        <label>Confirm New Password</label>
+                        <input type="password" id="change-pwd-confirm" class="glass-input" required placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="btn-premium" style="width:100%; margin-top: 10px; background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary);">Change Password</button>
+                </form>
+            </div>
+
+            <!-- Tab 2: Saved Addresses -->
+            <div id="pane-account-addresses" class="account-pane" style="display: none;">
+                <button class="btn-premium" id="btn-add-new-address" style="width: 100%; margin-bottom: 15px; font-size: 0.85rem; padding: 10px;"><i class="fa-solid fa-plus"></i> Add New Address</button>
+                
+                <!-- Address List -->
+                <div id="account-address-list" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Injected dynamically -->
+                </div>
+
+                <!-- Add/Edit Address Form (Hidden by default) -->
+                <form id="form-account-address" class="checkout-form" style="display: none; flex-direction: column; gap: 12px; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color);">
+                    <input type="hidden" id="account-address-id">
+                    <div class="form-group">
+                        <label>Address Tag</label>
+                        <select id="account-address-tag" class="glass-input" style="width: 100%;">
+                            <option value="Home">Home 🏠</option>
+                            <option value="Work">Work 💼</option>
+                            <option value="Other">Other 📍</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Detailed Address</label>
+                        <textarea id="account-address-detail" class="glass-input" rows="2" required placeholder="Flat, Street, Landmark..."></textarea>
+                    </div>
+                    <div class="form-group-row">
+                        <div class="form-group">
+                            <label>Latitude</label>
+                            <input type="number" step="0.0001" id="account-address-lat" class="glass-input" required placeholder="12.9250">
+                        </div>
+                        <div class="form-group">
+                            <label>Longitude</label>
+                            <input type="number" step="0.0001" id="account-address-lng" class="glass-input" required placeholder="77.6220">
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button type="button" class="btn-outline" id="btn-addr-preset-h" style="flex:1; padding: 6px; font-size: 0.75rem;">HSR Preset</button>
+                        <button type="button" class="btn-outline" id="btn-addr-preset-k" style="flex:1; padding: 6px; font-size: 0.75rem;">Kor Preset</button>
+                        <button type="button" class="btn-outline" id="btn-addr-preset-i" style="flex:1; padding: 6px; font-size: 0.75rem;">Ind Preset</button>
+                    </div>
+                    <div style="display: flex; gap: 10px; margin-top: 10px;">
+                        <button type="button" class="btn-outline" id="btn-cancel-address-form" style="flex: 1; padding: 10px;">Cancel</button>
+                        <button type="submit" class="btn-premium" style="flex: 1; padding: 10px;">Save Address</button>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Tab 3: Order History -->
+            <div id="pane-account-history" class="account-pane" style="display: none; display: flex; flex-direction: column; gap: 14px;">
+                <div id="account-history-orders" style="display: flex; flex-direction: column; gap: 15px;">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+
+            <!-- Tab 4: Vouchers -->
+            <div id="pane-account-vouchers" class="account-pane" style="display: none;">
+                <div id="account-voucher-list" style="display: flex; flex-direction: column; gap: 12px;">
+                    <!-- Injected dynamically -->
+                </div>
+            </div>
+
+        </div>
+
+        <div class="cart-footer" style="padding-top: 15px; border-top: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 10px;">
+            <button class="btn-premium" style="width: 100%; background: var(--danger); border-color: var(--danger); font-size: 1rem;" id="btn-account-logout"><i class="fa-solid fa-right-from-bracket"></i> Sign Out</button>
+        </div>
+    </div>
 
     <!-- Shopping Cart Drawer Slider -->
     <div id="cart-overlay-element" class="cart-overlay"></div>
@@ -572,6 +755,9 @@
                     <label for="login-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
                     <input type="password" id="login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
                 </div>
+                <div style="text-align: right; margin-top: -8px;">
+                    <a href="#" id="link-forgot-password" style="color: var(--text-muted); font-size: 0.75rem; text-decoration: none;">Forgot Password?</a>
+                </div>
                 <button type="submit" class="btn-premium" style="width: 100%; margin-top: 8px; padding: 12px;">Sign In</button>
                 <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
                     Don't have an account? <a href="#" id="link-to-register" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign Up</a>
@@ -604,6 +790,75 @@
                 <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
                     Already have an account? <a href="#" id="link-to-login" style="color: var(--primary); font-weight: 600; text-decoration: none;">Sign In</a>
                 </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Forgot Password Reset Modal -->
+    <div class="modal-overlay" id="modal-forgot-password" style="display: none; z-index: 3200;">
+        <div class="modal-content glass-panel" style="max-width: 400px; padding: 32px; position: relative;">
+            <button class="btn-icon" id="btn-close-forgot-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.2rem; color: var(--secondary); margin-bottom: 8px;"><i class="fa-solid fa-key"></i></div>
+                <h3>Reset Your Password</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Enter your email to receive a recovery OTP code</p>
+            </div>
+            
+            <!-- Step 1: Input Email -->
+            <form id="form-forgot-request" style="display: flex; flex-direction: column; gap: 15px;">
+                <div class="form-group">
+                    <label for="forgot-email">Email Address</label>
+                    <input type="email" id="forgot-email" class="glass-input" required placeholder="you@luxe.com" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 10px;">Send Recovery OTP</button>
+            </form>
+
+            <!-- Step 2: Input OTP & New Password -->
+            <form id="form-forgot-reset" style="display: none; flex-direction: column; gap: 15px;">
+                <div class="form-group">
+                    <label for="forgot-otp">Verification OTP Code</label>
+                    <input type="text" id="forgot-otp" class="glass-input" required placeholder="OTP Code" style="width: 100%; text-align: center; font-family: monospace; letter-spacing: 2px;">
+                </div>
+                <div class="form-group">
+                    <label for="forgot-new-password">New Password</label>
+                    <input type="password" id="forgot-new-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 10px; background: var(--secondary); border-color: var(--secondary);">Reset Password</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Ratings & Reviews Modal -->
+    <div class="modal-overlay" id="modal-store-review" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; padding: 30px; text-align: center; position: relative;">
+            <button class="btn-icon" id="btn-close-review-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.5rem; color: var(--primary); margin-bottom: 8px;"><i class="fa-regular fa-star-half-stroke"></i></div>
+                <h3 id="review-store-title">Rate Your Experience</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Help others by reviewing your order from <strong id="review-store-name-text">Store</strong></p>
+            </div>
+            
+            <form id="form-store-review" style="display: flex; flex-direction: column; gap: 20px;">
+                <!-- Star Rating selector -->
+                <div class="star-rating-selector" style="display: flex; justify-content: center; gap: 12px; font-size: 2.2rem; cursor: pointer;">
+                    <span class="star-item" data-rating="1"><i class="fa-regular fa-star" style="color: var(--text-muted);"></i></span>
+                    <span class="star-item" data-rating="2"><i class="fa-regular fa-star" style="color: var(--text-muted);"></i></span>
+                    <span class="star-item" data-rating="3"><i class="fa-regular fa-star" style="color: var(--text-muted);"></i></span>
+                    <span class="star-item" data-rating="4"><i class="fa-regular fa-star" style="color: var(--text-muted);"></i></span>
+                    <span class="star-item" data-rating="5"><i class="fa-regular fa-star" style="color: var(--text-muted);"></i></span>
+                </div>
+                <input type="hidden" id="review-rating-value" value="0">
+                
+                <div class="form-group" style="text-align: left;">
+                    <label for="review-comment" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Write your review (optional)</label>
+                    <textarea id="review-comment" class="glass-input" rows="3" placeholder="How was the freshness, quantity, and delivery speed?" style="width: 100%;"></textarea>
+                </div>
+                
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 12px;">Submit Feedback</button>
             </form>
         </div>
     </div>

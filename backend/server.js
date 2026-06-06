@@ -9,6 +9,7 @@ const jwt = require('jsonwebtoken');
 const app = express();
 const PORT = process.env.PORT || 5000;
 const JWT_SECRET = 'luxegrocer-super-secret-jwt-key-2026';
+const passwordRecoveryStore = {}; // Memory store for forgot-password OTPs (email -> { otp, expiry })
 
 // Enable CORS and raw body/json parsing
 app.use(cors());
@@ -53,9 +54,41 @@ const SEED_STORES = [
         lng: 77.6358,
         ownerEmail: 'dairy@luxe.com',
         products: [
-            { id: 'p1-1', name: 'Premium Full Cream Milk', category: 'dairy', price: 68.00, originalPrice: 75.00, badgeText: 'Bestseller', unit: '1 Liter', stock: 50, desc: 'Fresh farm-sourced pasteurized whole milk, rich in cream.', rating: 4.8, image: 'assets/prod_milk.png' },
+            { 
+                id: 'p1-1', 
+                name: 'Premium Full Cream Milk', 
+                category: 'dairy', 
+                price: 68.00, 
+                originalPrice: 75.00, 
+                badgeText: 'Bestseller', 
+                unit: '1 Liter', 
+                stock: 50, 
+                desc: 'Fresh farm-sourced pasteurized whole milk, rich in cream.', 
+                rating: 4.8, 
+                image: 'assets/prod_milk.png',
+                variants: [
+                    { id: 'p1-1-v1', name: '500ml', price: 36.00, stock: 30 },
+                    { id: 'p1-1-v2', name: '1 Liter', price: 68.00, stock: 50 }
+                ]
+            },
             { id: 'p1-2', name: 'Organic Greek Yogurt', category: 'dairy', price: 120.00, originalPrice: 140.00, badgeText: 'Popular', unit: '400g', stock: 25, desc: 'Thick, creamy yogurt made from organic dairy culture.', rating: 4.9, image: 'assets/prod_yogurt.png' },
-            { id: 'p1-3', name: 'Artisanal Butter (Salted)', category: 'dairy', price: 240.00, originalPrice: 260.00, badgeText: '', unit: '250g', stock: 15, desc: 'Slow-churned, rich salted table butter with high fat content.', rating: 4.7, image: 'assets/prod_butter.png' },
+            { 
+                id: 'p1-3', 
+                name: 'Artisanal Butter (Salted)', 
+                category: 'dairy', 
+                price: 240.00, 
+                originalPrice: 260.00, 
+                badgeText: '', 
+                unit: '250g', 
+                stock: 15, 
+                desc: 'Slow-churned, rich salted table butter with high fat content.', 
+                rating: 4.7, 
+                image: 'assets/prod_butter.png',
+                variants: [
+                    { id: 'p1-3-v1', name: '100g', price: 110.00, stock: 20 },
+                    { id: 'p1-3-v2', name: '250g', price: 240.00, stock: 15 }
+                ]
+            },
             { id: 'p1-4', name: 'Fresh Paneer (Cottage Cheese)', category: 'dairy', price: 110.00, originalPrice: 130.00, badgeText: 'Fresh Pick', unit: '200g', stock: 30, desc: 'Soft and fresh cottage cheese blocks, handmade daily.', rating: 4.8, image: 'assets/prod_paneer.png' }
         ]
     },
@@ -93,7 +126,23 @@ const SEED_STORES = [
         lng: 77.6412,
         ownerEmail: 'artisan@luxe.com',
         products: [
-            { id: 'p3-1', name: 'Sourdough Country Loaf', category: 'bakery', price: 160.00, originalPrice: 190.00, badgeText: 'Artisan', unit: '450g', stock: 10, desc: 'Wild yeast fermented sourdough bread with a crispy crust and chewy center.', rating: 4.9, image: 'assets/prod_sourdough.png' },
+            { 
+                id: 'p3-1', 
+                name: 'Sourdough Country Loaf', 
+                category: 'bakery', 
+                price: 160.00, 
+                originalPrice: 190.00, 
+                badgeText: 'Artisan', 
+                unit: '450g', 
+                stock: 10, 
+                desc: 'Wild yeast fermented sourdough bread with a crispy crust and chewy center.', 
+                rating: 4.9, 
+                image: 'assets/prod_sourdough.png',
+                variants: [
+                    { id: 'p3-1-v1', name: 'Half Loaf', price: 90.00, stock: 8 },
+                    { id: 'p3-1-v2', name: 'Full Loaf', price: 160.00, stock: 10 }
+                ]
+            },
             { id: 'p3-2', name: 'All-Butter French Croissants', category: 'bakery', price: 180.00, originalPrice: 210.00, badgeText: 'Baked Daily', unit: '2 Units', stock: 12, desc: 'Flaky, laminated layers of pure butter pastry, baked daily.', rating: 4.8, image: 'assets/prod_croissants.png' },
             { id: 'p3-4', name: 'Cold-Pressed Orange Juice', category: 'beverages', price: 130.00, originalPrice: 150.00, badgeText: '100% Raw', unit: '300ml', stock: 15, desc: '100% natural, raw cold-pressed orange juice without added sugar.', rating: 4.7, image: 'assets/prod_juice.png' }
         ]
@@ -176,6 +225,14 @@ function readDb() {
         const hasDairyMerchant = dbData.users.some(u => u.email === 'dairy@luxe.com');
         if (!hasDairyMerchant) {
             seedDefaultUsers(dbData);
+            changed = true;
+        }
+        if (!dbData.vouchers) {
+            dbData.vouchers = [
+                { code: 'LUXENEW', discountType: 'fixed', value: 100, minOrderValue: 300, desc: '₹100 off on first order above ₹300' },
+                { code: 'FREEDEL', discountType: 'free-delivery', value: 0, minOrderValue: 0, desc: 'Free Delivery on any order' },
+                { code: 'WEEKEND50', discountType: 'fixed', value: 50, minOrderValue: 250, desc: '₹50 off on orders above ₹250' }
+            ];
             changed = true;
         }
         if (changed) {
@@ -294,6 +351,38 @@ function verifyOrderStoreOwner(req, res, next) {
     if (!store || req.user.role !== 'merchant' || store.ownerEmail !== req.user.email) {
         return res.status(403).json({ error: 'Forbidden: You do not own the store for this order' });
     }
+    req.order = order;
+    next();
+}
+
+function verifyOrderStatusUpdater(req, res, next) {
+    const orderId = req.params.id;
+    const dbData = readDb();
+    const order = dbData.orders.find(o => o.id === orderId);
+    if (!order) {
+        return res.status(404).json({ error: 'Order not found' });
+    }
+    
+    const isCustomer = req.user.role === 'customer' && order.customer && order.customer.userId === req.user.id;
+    
+    if (isCustomer) {
+        // Customers can only cancel pending orders
+        if (req.body.status !== 'Cancelled') {
+            return res.status(403).json({ error: 'Forbidden: Customers can only transition order to Cancelled status' });
+        }
+        if (order.status !== 'Pending') {
+            return res.status(400).json({ error: 'Order cannot be cancelled because it has already been accepted by the merchant' });
+        }
+        req.order = order;
+        return next();
+    }
+    
+    // Merchant owner checks
+    const store = dbData.stores.find(s => s.id === order.storeId);
+    if (!store || req.user.role !== 'merchant' || store.ownerEmail !== req.user.email) {
+        return res.status(403).json({ error: 'Forbidden: You do not have permission to update this order' });
+    }
+    
     req.order = order;
     next();
 }
@@ -442,6 +531,97 @@ app.get('/api/auth/me', verifyToken, (req, res) => {
     });
 });
 
+// PUT: Update current user profile details
+app.put('/api/auth/me', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const idx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (idx === -1) return res.status(404).json({ error: 'User not found' });
+    
+    const { name, phone, address } = req.body;
+    dbData.users[idx].name = name || dbData.users[idx].name;
+    dbData.users[idx].phone = phone || dbData.users[idx].phone;
+    dbData.users[idx].address = address || dbData.users[idx].address;
+    
+    writeDb(dbData);
+    res.json({
+        id: dbData.users[idx].id,
+        email: dbData.users[idx].email,
+        role: dbData.users[idx].role,
+        name: dbData.users[idx].name,
+        phone: dbData.users[idx].phone || '',
+        address: dbData.users[idx].address || '',
+        storeId: dbData.users[idx].storeId || null
+    });
+});
+
+// PUT: Change logged-in user password
+app.put('/api/auth/change-password', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    
+    const { oldPassword, newPassword } = req.body;
+    if (!oldPassword || !newPassword) {
+        return res.status(400).json({ error: 'Old password and new password are required' });
+    }
+    
+    const valid = bcrypt.compareSync(oldPassword, user.password);
+    if (!valid) {
+        return res.status(400).json({ error: 'Incorrect current password' });
+    }
+    
+    user.password = bcrypt.hashSync(newPassword, 10);
+    writeDb(dbData);
+    res.json({ success: true, message: 'Password updated successfully' });
+});
+
+// POST: Forgot password (requests OTP reset code)
+app.post('/api/auth/forgot-password', (req, res) => {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email is required' });
+    
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.email.toLowerCase() === email.toLowerCase().trim());
+    if (!user) {
+        return res.status(404).json({ error: 'No user account found with this email' });
+    }
+    
+    const otp = Math.floor(1000 + Math.random() * 9000).toString();
+    const expiry = Date.now() + 5 * 60 * 1000;
+    
+    passwordRecoveryStore[email.toLowerCase().trim()] = { otp, expiry };
+    console.log(`[PASSWORD RECOVERY OTP] Generated code ${otp} for email ${email}`);
+    
+    res.json({ success: true, message: 'Simulated password reset OTP code dispatched.', otp });
+});
+
+// POST: Reset password (verifies OTP and writes new password)
+app.post('/api/auth/reset-password', (req, res) => {
+    const { email, otp, newPassword } = req.body;
+    if (!email || !otp || !newPassword) {
+        return res.status(400).json({ error: 'Email, OTP, and new password are required' });
+    }
+    
+    const emailKey = email.toLowerCase().trim();
+    const record = passwordRecoveryStore[emailKey];
+    
+    if (!record || record.otp !== otp.trim() || Date.now() > record.expiry) {
+        return res.status(400).json({ error: 'Invalid or expired recovery OTP code' });
+    }
+    
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.email.toLowerCase() === emailKey);
+    if (userIdx === -1) {
+        return res.status(404).json({ error: 'User not found' });
+    }
+    
+    dbData.users[userIdx].password = bcrypt.hashSync(newPassword, 10);
+    writeDb(dbData);
+    
+    delete passwordRecoveryStore[emailKey];
+    res.json({ success: true, message: 'Password has been reset successfully' });
+});
+
 // GET: All stores
 app.get('/api/stores', (req, res) => {
     const db = readDb();
@@ -521,7 +701,8 @@ app.put('/api/stores/:id', verifyToken, verifyStoreOwner, (req, res) => {
         minOrderValue: parseFloat(settings.minOrderValue) || dbData.stores[idx].minOrderValue,
         phone: settings.phone || dbData.stores[idx].phone,
         address: settings.address || dbData.stores[idx].address,
-        image: settings.image || dbData.stores[idx].image
+        image: settings.image || dbData.stores[idx].image,
+        status: settings.status || dbData.stores[idx].status || 'Open'
     };
     
     writeDb(dbData);
@@ -541,12 +722,13 @@ app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) =
         id: 'prod-' + Date.now(),
         name: prodData.name,
         category: prodData.category,
-        price: parseFloat(prodData.price),
+        price: parseFloat(prodData.price) || 0.0,
         unit: prodData.unit || '1 Unit',
         stock: parseInt(prodData.stock) || 0,
         desc: prodData.desc || '',
         rating: 5.0,
-        image: prodUrl || ''
+        image: prodUrl || '',
+        variants: prodData.variants || null
     };
     
     dbData.stores[storeIdx].products.push(newProduct);
@@ -572,11 +754,12 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
         ...dbData.stores[storeIdx].products[prodIdx],
         name: updated.name || dbData.stores[storeIdx].products[prodIdx].name,
         category: updated.category || dbData.stores[storeIdx].products[prodIdx].category,
-        price: parseFloat(updated.price) || dbData.stores[storeIdx].products[prodIdx].price,
-        unit: updated.unit || dbData.stores[storeIdx].products[prodIdx].unit,
+        price: parseFloat(updated.price) !== undefined ? parseFloat(updated.price) : dbData.stores[storeIdx].products[prodIdx].price,
+        unit: updated.unit !== undefined ? updated.unit : dbData.stores[storeIdx].products[prodIdx].unit,
         stock: parseInt(updated.stock) !== undefined ? parseInt(updated.stock) : dbData.stores[storeIdx].products[prodIdx].stock,
-        desc: updated.desc || dbData.stores[storeIdx].products[prodIdx].desc,
-        image: updated.image || dbData.stores[storeIdx].products[prodIdx].image
+        desc: updated.desc !== undefined ? updated.desc : dbData.stores[storeIdx].products[prodIdx].desc,
+        image: updated.image || dbData.stores[storeIdx].products[prodIdx].image,
+        variants: updated.variants !== undefined ? updated.variants : dbData.stores[storeIdx].products[prodIdx].variants
     };
     
     writeDb(dbData);
@@ -594,6 +777,45 @@ app.delete('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner,
     
     broadcastSync('catalog_changed', req.params.id);
     res.json({ success: true });
+});
+
+// POST: Add a store review & rating
+app.post('/api/stores/:id/reviews', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const storeIdx = dbData.stores.findIndex(s => s.id === req.params.id);
+    if (storeIdx === -1) {
+        return res.status(404).json({ error: 'Store not found' });
+    }
+    
+    const { rating, comment } = req.body;
+    if (rating === undefined || rating < 1 || rating > 5) {
+        return res.status(400).json({ error: 'Rating must be between 1 and 5' });
+    }
+    
+    const store = dbData.stores[storeIdx];
+    if (!store.reviews) {
+        store.reviews = [];
+    }
+    
+    const newReview = {
+        id: 'rev-' + Date.now(),
+        userId: req.user.id,
+        userName: req.user.name,
+        rating: parseFloat(rating),
+        comment: comment || '',
+        timestamp: new Date().toISOString()
+    };
+    
+    store.reviews.push(newReview);
+    
+    // Recalculate average rating
+    const totalRating = store.reviews.reduce((sum, r) => sum + r.rating, 0);
+    store.rating = totalRating / store.reviews.length;
+    store.reviewsCount = store.reviews.length;
+    
+    writeDb(dbData);
+    broadcastSync('store_updated', store.id);
+    res.status(201).json(newReview);
 });
 
 // GET: Fetch all orders (restricted by user role / owner status)
@@ -631,6 +853,8 @@ app.post('/api/orders', verifyToken, (req, res) => {
         items: orderData.items,
         subtotal: orderData.items.reduce((sum, item) => sum + (item.price * item.quantity), 0),
         deliveryFee: parseFloat(orderData.deliveryFee) || 0,
+        discount: parseFloat(orderData.discount) || 0,
+        voucherCode: orderData.voucherCode || '',
         customer: {
             ...orderData.customer,
             userId: req.user.id,
@@ -646,9 +870,16 @@ app.post('/api/orders', verifyToken, (req, res) => {
     
     // Deduct stock levels on server
     orderData.items.forEach(cartItem => {
-        const pIdx = store.products.findIndex(p => p.id === cartItem.id);
-        if (pIdx !== -1) {
-            store.products[pIdx].stock = Math.max(0, store.products[pIdx].stock - cartItem.quantity);
+        const product = store.products.find(p => p.id === cartItem.id);
+        if (product) {
+            if (cartItem.variantId && product.variants && product.variants.length > 0) {
+                const variant = product.variants.find(v => v.id === cartItem.variantId);
+                if (variant) {
+                    variant.stock = Math.max(0, variant.stock - cartItem.quantity);
+                }
+            } else {
+                product.stock = Math.max(0, product.stock - cartItem.quantity);
+            }
         }
     });
     
@@ -660,7 +891,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
 });
 
 // PUT: Advance/Update order status manually
-app.put('/api/orders/:id/status', verifyToken, verifyOrderStoreOwner, (req, res) => {
+app.put('/api/orders/:id/status', verifyToken, verifyOrderStatusUpdater, (req, res) => {
     const dbData = readDb();
     const idx = dbData.orders.findIndex(o => o.id === req.params.id);
     
@@ -669,7 +900,7 @@ app.put('/api/orders/:id/status', verifyToken, verifyOrderStoreOwner, (req, res)
     dbData.orders[idx].statusTimeline.push({
         status,
         time: new Date().toISOString(),
-        desc: description || 'Order status updated'
+        desc: description || (status === 'Cancelled' ? 'Order cancelled by customer during grace window.' : 'Order status updated')
     });
     
     writeDb(dbData);
@@ -701,7 +932,88 @@ app.post('/api/orders/:id/verify-otp', verifyToken, verifyOrderStoreOwner, (req,
     res.json({ success: true, order: dbData.orders[idx] });
 });
 
-// Start Express Listener
+// --- Saved Addresses routes ---
+app.get('/api/users/addresses', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json(user.addresses || []);
+});
+
+app.post('/api/users/addresses', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found' });
+    
+    const { tag, address, lat, lng } = req.body;
+    if (!tag || !address) {
+        return res.status(400).json({ error: 'Tag and address are required' });
+    }
+    
+    if (!dbData.users[userIdx].addresses) {
+        dbData.users[userIdx].addresses = [];
+    }
+    
+    const newAddress = {
+        id: 'addr-' + Date.now(),
+        tag,
+        address,
+        lat: parseFloat(lat) || 12.9250,
+        lng: parseFloat(lng) || 77.6220
+    };
+    
+    dbData.users[userIdx].addresses.push(newAddress);
+    writeDb(dbData);
+    res.status(201).json(newAddress);
+});
+
+app.delete('/api/users/addresses/:id', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found' });
+    
+    if (!dbData.users[userIdx].addresses) {
+        dbData.users[userIdx].addresses = [];
+    }
+    
+    dbData.users[userIdx].addresses = dbData.users[userIdx].addresses.filter(a => a.id !== req.params.id);
+    writeDb(dbData);
+    res.json({ success: true });
+});
+
+// --- Vouchers routes ---
+app.get('/api/vouchers', (req, res) => {
+    const dbData = readDb();
+    res.json(dbData.vouchers || []);
+});
+
+app.post('/api/vouchers/validate', verifyToken, (req, res) => {
+    const { code, subtotal } = req.body;
+    if (!code || subtotal === undefined) {
+        return res.status(400).json({ error: 'Code and subtotal are required' });
+    }
+    
+    const dbData = readDb();
+    const voucher = (dbData.vouchers || []).find(v => v.code.toUpperCase() === code.trim().toUpperCase());
+    
+    if (!voucher) {
+        return res.status(404).json({ error: 'Invalid voucher code' });
+    }
+    
+    if (subtotal < voucher.minOrderValue) {
+        return res.status(400).json({ error: `Minimum order value to apply this voucher is ₹${voucher.minOrderValue}` });
+    }
+    
+    res.json({
+        success: true,
+        voucher: {
+            code: voucher.code,
+            discountType: voucher.discountType,
+            value: voucher.value,
+            desc: voucher.desc
+        }
+    });
+});
 app.listen(PORT, () => {
     console.log(`LuxeGrocer API Backend active on http://localhost:${PORT}`);
 });

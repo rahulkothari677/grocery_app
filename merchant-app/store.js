@@ -108,7 +108,13 @@ class LuxeStore {
 
     // --- User Location Methods (Kept local to browser session) ---
     getUserLocation() {
-        return JSON.parse(localStorage.getItem('luxegrocer_user_location'));
+        try {
+            const loc = localStorage.getItem('luxegrocer_user_location');
+            if (loc) return JSON.parse(loc);
+        } catch (e) {
+            console.error("Error reading user location from localStorage:", e);
+        }
+        return USER_LOCATION;
     }
 
     setUserLocation(lat, lng, address) {

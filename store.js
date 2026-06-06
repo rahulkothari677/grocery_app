@@ -18,7 +18,9 @@ const USER_LOCATION = {
 class LuxeStore {
     constructor() {
         this.baseUrl = 'http://localhost:5000/api';
-        this.token = localStorage.getItem('luxegrocer_auth_token') || null;
+        const isMerchant = typeof window !== 'undefined' && window.location.pathname.includes('merchant.html');
+        this.tokenKey = isMerchant ? 'luxegrocer_merchant_auth_token' : 'luxegrocer_customer_auth_token';
+        this.token = localStorage.getItem(this.tokenKey) || null;
         this.currentUser = null;
         this.initDatabase();
     }
@@ -50,7 +52,7 @@ class LuxeStore {
                 return { success: false, error: data.error || 'Registration failed' };
             }
             this.token = data.token;
-            localStorage.setItem('luxegrocer_auth_token', data.token);
+            localStorage.setItem(this.tokenKey, data.token);
             this.currentUser = data.user;
             return { success: true, user: data.user };
         } catch (err) {
@@ -71,7 +73,7 @@ class LuxeStore {
                 return { success: false, error: data.error || 'Login failed' };
             }
             this.token = data.token;
-            localStorage.setItem('luxegrocer_auth_token', data.token);
+            localStorage.setItem(this.tokenKey, data.token);
             this.currentUser = data.user;
             return { success: true, user: data.user };
         } catch (err) {
@@ -102,7 +104,7 @@ class LuxeStore {
     logout() {
         this.token = null;
         this.currentUser = null;
-        localStorage.removeItem('luxegrocer_auth_token');
+        localStorage.removeItem(this.tokenKey);
     }
 
     // --- User Location Methods (Kept local to browser session) ---

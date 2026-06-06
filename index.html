@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuxeGrocer - Premium Local Grocery & Dairy Marketplace</title>
+    <meta name="description" content="Connect directly with premium neighborhood grocery and dairy stores. Enjoy fast direct store-to-door delivery with no middlemen.">
+    <!-- Main Stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+
+    <!-- Sticky Header & Nav -->
+    <header class="navbar">
+        <div class="container nav-container">
+            <a href="#" class="brand-logo" id="btn-logo">
+                <span class="gradient-text"><i class="fa-solid fa-store"></i> LuxeGrocer</span>
+            </a>
+
+            <!-- Geolocation Mock Indicator -->
+            <div class="location-selector" id="btn-change-location" title="Click to simulate changing your address">
+                <i class="fa-solid fa-location-dot" style="color: var(--primary);"></i >
+                <div class="location-text" id="active-location-text">
+                    Loading your location...
+                </div>
+                <i class="fa-solid fa-chevron-down" style="font-size: 0.75rem; color: var(--text-muted);"></i>
+            </div>
+
+            <!-- Header Action Controls -->
+            <div class="nav-actions">
+                <a href="merchant.html" class="btn-premium" style="background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; text-decoration: none; display: inline-flex; align-items: center; gap: 8px;" title="Switch to the merchant/partner workspace">
+                    <i class="fa-solid fa-shop"></i> Partner Portal
+                </a>
+
+                <!-- Shopping Cart Icon Button -->
+                <button class="btn-icon" id="btn-cart" style="position: relative;">
+                    <i class="fa-solid fa-bag-shopping"></i>
+                    <span id="cart-badge" style="position: absolute; top: -6px; right: -6px; background: var(--danger); color: white; border-radius: 50%; font-size: 0.75rem; width: 20px; height: 20px; display: flex; align-items: center; justify-content: center; font-weight: bold; border: 2px solid var(--bg-dark); display: none;">0</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="container" style="min-height: calc(100vh - 230px);">
+
+        <!-- VIEW 1: Consumer Landing & Store Directory -->
+        <section id="view-landing" class="view-section">
+            
+            <!-- Weather and Delivery Speed Info Banner -->
+            <div class="weather-delivery-banner glass-panel" id="weather-banner" style="margin-top: 20px; padding: 12px 24px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 0.85rem; border-left: 4px solid var(--primary); box-shadow: var(--shadow-premium);">
+                <div style="display: flex; align-items: center; gap: 10px;">
+                    <span id="weather-icon" style="font-size: 1.25rem;">☀️</span>
+                    <span id="weather-text">Weather: <strong>Sunny & Warm</strong> • Sourcing riders instantly</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 6px; color: var(--secondary);">
+                    <i class="fa-solid fa-bolt" style="animation: pulse 1.5s infinite; font-size: 0.75rem;"></i>
+                    <span id="delivery-speed-text">Delivery Speed: <strong>Instant (10-15 Mins)</strong></span>
+                </div>
+            </div>
+
+            <div class="hero-section">
+                <div class="hero-content">
+                    <h1>Savor Local, Delivered <br><span class="gradient-text">Directly from Source</span></h1>
+                    <p>Browse premium dairy and fresh farm produce stocked right next door. Orders are delivered directly by independent local merchants.</p>
+                </div>
+
+                <!-- Global Product & Store Search -->
+                <div class="search-container-large">
+                    <div class="search-bar-wrapper glass-panel">
+                        <i class="fa-solid fa-magnifying-glass search-icon-inside"></i>
+                        <input type="text" id="global-search-input" class="glass-input search-input-large" placeholder="Search fresh milk, organic veggies, bakery or shops..." autocomplete="off">
+                        <button class="btn-premium btn-search-inside" id="btn-global-search">Search</button>
+                    </div>
+                    <!-- Autocomplete suggestion panel -->
+                    <div class="search-autocomplete-dropdown glass-panel" id="search-autocomplete-box" style="display: none;"></div>
+                    <div class="search-suggestions">
+                        <span class="suggestion-badge" data-tag="Milk">🥛 Full Cream Milk</span>
+                        <span class="suggestion-badge" data-tag="Paneer">🧀 Fresh Paneer</span>
+                        <span class="suggestion-badge" data-tag="Sourdough">🍞 Sourdough Loaf</span>
+                        <span class="suggestion-badge" data-tag="Mango">🥭 Mangoes</span>
+                        <span class="suggestion-badge" data-tag="Organic">🥦 Organic Veggies</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories Section -->
+            <div>
+                <div class="section-header">
+                    <div>
+                        <h2>Curated Specialties</h2>
+                        <p>Browse products by neighborhood shelf category</p>
+                    </div>
+                </div>
+                <div class="category-grid" id="category-list-container">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- Nearby Stores Section -->
+            <div>
+                <div class="section-header">
+                    <div>
+                        <h2>Premium Neighborhood Stores</h2>
+                        <p>Ordering directly from independent local merchants who deliver to your doorstep</p>
+                    </div>
+                </div>
+                <div class="stores-grid" id="store-list-container">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- VIEW 2: Global Product & Comparative Search Results -->
+        <section id="view-search-results" class="view-section" style="display: none;">
+            <div style="margin-top: 30px;">
+                <button class="btn-outline" id="btn-back-to-landing-from-search"><i class="fa-solid fa-arrow-left"></i> Back to Home</button>
+            </div>
+            
+            <div class="section-header" style="margin-top: 20px; margin-bottom: 10px;">
+                <div>
+                    <h2 id="search-title-text">Search Results for "Milk"</h2>
+                    <p id="search-subtitle-text">Comparing availability and prices across neighborhood stores</p>
+                </div>
+            </div>
+
+            <div class="search-results-layout">
+                <!-- Filters Pane -->
+                <aside class="search-filters-pane glass-panel">
+                    <h3>Filters</h3>
+                    
+                    <div class="filter-section">
+                        <h4>Sort By</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="radio" name="search-sort" value="distance" checked style="accent-color: var(--primary);"> Nearest Distance
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="radio" name="search-sort" value="price-asc" style="accent-color: var(--primary);"> Lowest Price First
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="radio" name="search-sort" value="rating" style="accent-color: var(--primary);"> Top Rated Products
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-section">
+                        <h4>Max Delivery Distance</h4>
+                        <input type="range" id="filter-distance-slider" min="1" max="10" value="6" style="width: 100%; accent-color: var(--primary); margin-top: 8px;">
+                        <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">
+                            <span>1 km</span>
+                            <span id="distance-slider-value">6 km</span>
+                        </div>
+                    </div>
+                </aside>
+
+                <!-- Comparison Cards Pane -->
+                <div class="search-results-pane" id="search-comparison-container">
+                    <!-- Comparison items injected here -->
+                </div>
+            </div>
+        </section>
+
+
+        <!-- VIEW 3: Store Profile / Product Listings -->
+        <section id="view-store-profile" class="view-section" style="display: none;">
+            <div style="margin-top: 30px; display: flex; justify-content: space-between; align-items: center;">
+                <button class="btn-outline" id="btn-back-to-landing-from-store"><i class="fa-solid fa-arrow-left"></i> Explore Other Stores</button>
+                <div id="store-direct-search-wrapper" style="width: 320px; position: relative;">
+                    <input type="text" id="store-local-search" class="glass-input" placeholder="Search in this shop..." style="width: 100%; padding-right: 40px; border-radius: 30px;">
+                    <i class="fa-solid fa-magnifying-glass" style="position: absolute; right: 16px; top: 13px; color: var(--text-muted);"></i>
+                </div>
+            </div>
+
+            <!-- Dynamic Store Details Header -->
+            <div id="store-profile-header-container">
+                <!-- Header content loaded dynamically -->
+            </div>
+
+            <!-- Categories Tabs -->
+            <nav class="tab-navigation" id="store-category-tabs">
+                <!-- Nav tabs injected dynamically -->
+            </nav>
+
+            <!-- Store Products Grid -->
+            <div class="products-grid" id="store-products-container">
+                <!-- Products injected dynamically -->
+            </div>
+        </section>
+
+
+        <!-- VIEW 4: Checkout & Order Review Form -->
+        <section id="view-checkout" class="view-section" style="display: none;">
+            <div style="margin-top: 30px;">
+                <button class="btn-outline" id="btn-back-to-store-from-checkout"><i class="fa-solid fa-arrow-left"></i> Return to Shop</button>
+            </div>
+
+            <div class="checkout-grid">
+                <!-- Address & Payment Entry -->
+                <div class="checkout-pane glass-panel">
+                    <h2>Premium Checkout</h2>
+                    <form class="checkout-form" id="checkout-payment-form" onsubmit="event.preventDefault();">
+                        <div class="form-group">
+                            <label for="checkout-name">Recipient Name</label>
+                            <input type="text" id="checkout-name" class="glass-input" required placeholder="E.g., Rahul Sharma">
+                        </div>
+                        <div class="form-group-row">
+                            <div class="form-group">
+                                <label for="checkout-phone">Mobile Number</label>
+                                <input type="tel" id="checkout-phone" class="glass-input" required placeholder="E.g., +91 98765 43210">
+                            </div>
+                            <div class="form-group">
+                                <label for="checkout-time">Delivery Schedule</label>
+                                <select id="checkout-time" class="glass-input">
+                                    <option value="immediate">Immediate Direct Delivery (Within 45 mins)</option>
+                                    <option value="morning">Slot: Tomorrow Morning (7 AM - 9 AM)</option>
+                                    <option value="evening">Slot: Tomorrow Evening (6 PM - 8 PM)</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="checkout-address">Delivery Address</label>
+                            <textarea id="checkout-address" class="glass-input" rows="3" required placeholder="Flat, Street, Landmark details..."></textarea>
+                        </div>
+                        
+                        <!-- Rider Tipping Widget -->
+                        <div style="margin-top: 20px; border-top: 1px solid var(--border-color); padding-top: 20px;" id="tipping-container">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 8px;"><i class="fa-solid fa-hand-holding-dollar" style="color: var(--primary);"></i> Support Your Delivery Partner</h3>
+                            <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 12px;">100% of your tips go directly to the rider to support neighborhood delivery logistics.</p>
+                            <div style="display: flex; gap: 10px; margin-bottom: 10px;">
+                                <button type="button" class="btn-outline tip-btn" data-tip="0" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">Maybe Later</button>
+                                <button type="button" class="btn-outline tip-btn" data-tip="15" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹15</button>
+                                <button type="button" class="btn-outline tip-btn" data-tip="30" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹30</button>
+                                <button type="button" class="btn-outline tip-btn" data-tip="50" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹50 ❤️</button>
+                            </div>
+                            <input type="hidden" id="tip-amount-input" value="0">
+                            <div id="tip-alert-msg" style="font-size: 0.75rem; color: var(--primary); display: none; text-align: center; font-weight: 500;">Thank you! Your rider will be notified of your kind gesture.</div>
+                        </div>
+                        
+                        <div style="margin-top: 15px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                            <h3 style="font-size: 1.1rem; margin-bottom: 12px;">Direct Settlement Selection</h3>
+                            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Orders are delivered directly by the store. Settlement can be done Cash-on-Delivery (COD) or UPI directly to the delivery rider.</p>
+                            
+                            <div style="display: flex; gap: 15px;">
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
+                                    <input type="radio" name="payment-method" value="upi" checked style="accent-color: var(--primary);"> UPI / Scan QR Code
+                                </label>
+                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
+                                    <input type="radio" name="payment-method" value="cod" style="accent-color: var(--primary);"> Cash on Delivery
+                                </label>
+                            </div>
+                        </div>
+
+                        <button type="submit" class="btn-premium" style="margin-top: 10px; font-size: 1.1rem; width: 100%;" id="btn-submit-order">Place Delivery Order</button>
+                    </form>
+                </div>
+
+                <!-- Right Side Summary Pane -->
+                <div class="glass-panel" style="padding: 30px; height: fit-content;">
+                    <h3 style="font-size: 1.3rem; margin-bottom: 20px; border-bottom: 1px solid var(--border-color); padding-bottom: 10px;">Cart Summary</h3>
+                    <div id="checkout-items-list" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
+                        <!-- Items rendered dynamically -->
+                    </div>
+                    <div style="border-top: 1px dashed var(--border-color); padding-top: 16px;">
+                        <div class="cart-summary-row">
+                            <span>Subtotal</span>
+                            <span id="checkout-subtotal">₹0.00</span>
+                        </div>
+                        <div class="cart-summary-row" id="checkout-rider-tip-row" style="display: none;">
+                            <span>Rider Tip Support</span>
+                            <span id="checkout-rider-tip-amount">₹0.00</span>
+                        </div>
+                        <div class="cart-summary-row">
+                            <span>Direct Delivery Charge</span>
+                            <span id="checkout-delivery-fee">₹0.00</span>
+                        </div>
+                        <div class="cart-summary-total">
+                            <span>Grand Total</span>
+                            <span id="checkout-grand-total">₹0.00</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+
+        <!-- VIEW 5: Live Order Tracker & Timeline Simulator -->
+        <section id="view-order-tracker" class="view-section" style="display: none;">
+            <div class="tracker-container glass-panel">
+                <div class="tracker-header">
+                    <div>
+                        <h2>Delivery Progress</h2>
+                        <span style="font-size: 0.85rem; color: var(--text-muted);" id="tracker-shop-name">Ordering from: GreenValley Dairy</span>
+                    </div>
+                    <div class="tracker-id" id="tracker-order-id">#ORDER-104921</div>
+                </div>
+
+                <!-- Cancel Order Grace Timer -->
+                <div class="glass-panel" id="cancel-grace-box" style="padding: 16px; border: 1.5px dashed var(--danger); border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; background: rgba(239, 68, 68, 0.02);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <!-- Circle SVG timer -->
+                        <svg width="40" height="40" viewBox="0 0 36 36" style="transform: rotate(-90deg); flex-shrink: 0;">
+                            <circle cx="18" cy="18" r="15.9155" fill="none" stroke="rgba(239, 68, 68, 0.1)" stroke-width="3" />
+                            <circle id="cancel-timer-circle" cx="18" cy="18" r="15.9155" fill="none" stroke="var(--danger)" stroke-width="3" stroke-dasharray="100, 100" />
+                            <text x="18" y="21" font-size="10" text-anchor="middle" font-weight="bold" fill="white" transform="rotate(90 18 18)" id="cancel-timer-text">60</text>
+                        </svg>
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">Grace Cancellation Active</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Cancel this order within the next 60 seconds if you made a mistake.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="btn-outline" id="btn-cancel-order" style="border-color: var(--danger); color: var(--danger); font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; white-space: nowrap;">Cancel Order</button>
+                </div>
+
+                <!-- Doorstep OTP Verification Card -->
+                <div class="glass-panel" id="tracker-otp-box" style="padding: 16px; border: 1.5px solid var(--primary); border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.02);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 1.8rem;">🔑</span>
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);">Share Doorstep Verification OTP</h4>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Share this code with the store delivery boy when they arrive to confirm delivery.</p>
+                        </div>
+                    </div>
+                    <div style="text-align: center; background: rgba(16, 185, 129, 0.1); border: 1px solid var(--primary); padding: 8px 16px; border-radius: 8px;">
+                        <span style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: bold; letter-spacing: 0.5px;">Delivery OTP</span>
+                        <strong style="font-size: 1.4rem; color: var(--primary); font-family: monospace; letter-spacing: 2px;" id="tracker-otp-code">0000</strong>
+                    </div>
+                </div>
+
+                <!-- Simulation Progress Controller (For demo validation) -->
+                <div style="background: rgba(245,158,11,0.06); border: 1px solid rgba(245,158,11,0.2); border-radius: 12px; padding: 16px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: center;">
+                    <div style="font-size: 0.85rem;">
+                        <strong style="color: var(--accent);"><i class="fa-solid fa-circle-nodes"></i> Interactive Simulator:</strong><br>
+                        Updates sync in real-time when store partners update dashboard, or test using the simulator below.
+                    </div>
+                    <div style="display: flex; gap: 8px;">
+                        <button class="btn-outline" style="padding: 6px 12px; font-size: 0.75rem; border-color: var(--accent); color: var(--accent);" id="btn-sim-advance">Advance Status</button>
+                    </div>
+                </div>
+
+                <!-- Animated Mock Tracking Map -->
+                <div class="map-frame" id="tracker-map-frame">
+                    <!-- Injected dynamically -->
+                </div>
+
+                <!-- Timeline Steps -->
+                <div class="tracker-timeline" id="tracker-timeline-steps">
+                    <!-- Dynamic updates based on state -->
+                </div>
+
+                <div style="display: flex; justify-content: center; gap: 16px; margin-top: 20px;">
+                    <a href="tel:+919876543210" class="btn-outline" id="tracker-store-phone"><i class="fa-solid fa-phone"></i> Call Merchant</a>
+                    <button class="btn-premium" id="btn-tracker-done">Return to Home</button>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- FOOTER -->
+    <footer>
+        <div class="container">
+            <p style="margin-bottom: 10px;">&copy; 2026 LuxeGrocer Inc. The most premium hyperlocal marketplace ever built.</p>
+            <p>
+                <a href="index.html">Consumer Storefront</a> | 
+                <a href="merchant.html">Merchant Portal</a> | 
+                <a href="https://github.com/rahul4/luxegrocer" target="_blank">Open Source</a>
+            </p>
+        </div>
+    </footer>
+
+
+    <!-- MODALS AND DRAWERS -->
+
+    <!-- Shopping Cart Drawer Slider -->
+    <div id="cart-overlay-element" class="cart-overlay"></div>
+    <div id="cart-drawer-element" class="cart-drawer">
+        <div class="cart-header">
+            <h2><i class="fa-solid fa-bag-shopping" style="color: var(--primary);"></i> Your Cart</h2>
+            <button class="btn-icon" id="btn-close-cart"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        
+        <!-- Cart Savings Progress Bar -->
+        <div class="cart-savings-tracker" id="cart-savings-box" style="padding: 16px; background: rgba(16,185,129,0.04); border: 1px solid rgba(16,185,129,0.15); border-radius: 12px; margin: 15px 24px 0 24px;">
+            <div style="display: flex; justify-content: space-between; font-size: 0.85rem; margin-bottom: 8px;">
+                <span id="savings-title" style="color: var(--text-main); font-weight: 500;">Free Delivery Progress</span>
+                <span id="savings-value" style="color: var(--primary); font-weight: 700;">Add ₹200 more</span>
+            </div>
+            <div class="metric-bar-outer" style="height: 6px; background: rgba(255,255,255,0.05); border-radius: 4px; overflow: hidden;">
+                <div class="metric-bar-inner" id="savings-progress-bar" style="height: 100%; background: var(--primary); width: 0%; transition: width 0.4s ease;"></div>
+            </div>
+            <div id="savings-msg" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 6px;">Add items to unlock FREE neighborhood delivery!</div>
+        </div>
+
+        <div class="cart-items-container" id="cart-items-wrapper">
+            <!-- Items filled dynamically -->
+        </div>
+
+        <!-- Smart Upsell recommendations slider -->
+        <div class="cart-upsell-container" id="cart-upsell-box" style="display: none;">
+            <h4 style="font-size: 0.9rem; margin-bottom: 10px; color: var(--accent);"><i class="fa-solid fa-bolt"></i> Complete Your Order</h4>
+            <div class="cart-upsell-list" id="cart-upsell-list-wrapper">
+                <!-- Rendered dynamically -->
+            </div>
+        </div>
+
+        <div class="cart-footer">
+            <div class="cart-summary-row">
+                <span>Subtotal</span>
+                <span id="cart-summary-subtotal">₹0.00</span>
+            </div>
+            <div class="cart-summary-row">
+                <span>Delivery Charge</span>
+                <span id="cart-summary-delivery">₹0.00</span>
+            </div>
+            <div class="cart-summary-total">
+                <span>Estimated Total</span>
+                <span id="cart-summary-total">₹0.00</span>
+            </div>
+            <button class="btn-premium" style="width: 100%; font-size: 1.1rem; padding: 14px;" id="btn-cart-checkout">Proceed to Checkout</button>
+        </div>
+    </div>
+
+
+    <!-- User Location Editor Modal -->
+    <div class="modal-overlay" id="modal-location-element">
+        <div class="modal-content glass-panel">
+            <div class="modal-header">
+                <h3>Simulate Your Location</h3>
+                <button class="modal-close" id="btn-close-location-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+                Since LuxeGrocer is a hyper-local marketplace, changing your location dynamically recalculates delivery availability, distances, and rates.
+            </div>
+            <form id="location-simulation-form" class="checkout-form">
+                <div class="form-group">
+                    <label for="loc-address">Mock Location Address</label>
+                    <input type="text" id="loc-address" class="glass-input" required placeholder="E.g., 2nd Block, Koramangala, Bengaluru">
+                </div>
+                <div class="form-group-row">
+                    <div class="form-group">
+                        <label for="loc-lat">Latitude</label>
+                        <input type="number" step="0.0001" id="loc-lat" class="glass-input" required placeholder="12.9250">
+                    </div>
+                    <div class="form-group">
+                        <label for="loc-lng">Longitude</label>
+                        <input type="number" step="0.0001" id="loc-lng" class="glass-input" required placeholder="77.6220">
+                    </div>
+                </div>
+                <div style="display: flex; gap: 8px; margin-top: 10px;">
+                    <button type="button" class="btn-outline" style="flex-grow: 1;" id="btn-loc-preset-h">HSR Preset</button>
+                    <button type="button" class="btn-outline" style="flex-grow: 1;" id="btn-loc-preset-k">Koramangala Preset</button>
+                    <button type="button" class="btn-outline" style="flex-grow: 1;" id="btn-loc-preset-i">Indiranagar Preset</button>
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; margin-top: 10px;">Update Simulation Coordinates</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Mock UPI Payment QR Modal -->
+    <div class="modal-overlay" id="modal-upi-payment" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; text-align: center; padding: 30px;">
+            <div class="modal-header">
+                <h3>Direct UPI Settlement</h3>
+                <button class="modal-close" id="btn-close-upi-modal"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Scan this simulated QR code to settle the order directly with the merchant.</p>
+            
+            <div style="background: white; padding: 20px; border-radius: 16px; display: inline-block; box-shadow: var(--shadow-premium); margin-bottom: 20px;">
+                <svg width="200" height="200" viewBox="0 0 100 100" style="display: block;">
+                    <rect width="100" height="100" fill="white"/>
+                    <rect x="5" y="5" width="25" height="25" fill="black"/>
+                    <rect x="8" y="8" width="19" height="19" fill="white"/>
+                    <rect x="11" y="11" width="13" height="13" fill="black"/>
+                    
+                    <rect x="70" y="5" width="25" height="25" fill="black"/>
+                    <rect x="73" y="8" width="19" height="19" fill="white"/>
+                    <rect x="76" y="11" width="13" height="13" fill="black"/>
+                    
+                    <rect x="5" y="70" width="25" height="25" fill="black"/>
+                    <rect x="8" y="73" width="19" height="19" fill="white"/>
+                    <rect x="11" y="76" width="13" height="13" fill="black"/>
+                    
+                    <rect x="35" y="5" width="5" height="10" fill="black"/>
+                    <rect x="45" y="10" width="10" height="5" fill="black"/>
+                    <rect x="60" y="15" width="5" height="15" fill="black"/>
+                    <rect x="35" y="25" width="15" height="5" fill="black"/>
+                    
+                    <rect x="5" y="35" width="10" height="5" fill="black"/>
+                    <rect x="10" y="45" width="5" height="10" fill="black"/>
+                    <rect x="25" y="55" width="10" height="5" fill="black"/>
+                    <rect x="15" y="60" width="5" height="5" fill="black"/>
+                    
+                    <rect x="35" y="35" width="30" height="30" fill="black"/>
+                    <rect x="40" y="40" width="20" height="20" fill="white"/>
+                    <rect x="45" y="45" width="10" height="10" fill="black"/>
+                    
+                    <rect x="70" y="35" width="10" height="10" fill="black"/>
+                    <rect x="85" y="40" width="10" height="5" fill="black"/>
+                    <rect x="75" y="50" width="5" height="15" fill="black"/>
+                    <rect x="85" y="60" width="10" height="10" fill="black"/>
+                    
+                    <rect x="35" y="75" width="10" height="5" fill="black"/>
+                    <rect x="50" y="80" width="5" height="15" fill="black"/>
+                    <rect x="40" y="90" width="25" height="5" fill="black"/>
+                    
+                    <rect x="75" y="75" width="15" height="15" fill="black"/>
+                </svg>
+            </div>
+            
+            <div style="font-size: 1.3rem; font-weight: 800; margin-bottom: 4px;" id="upi-grand-total">₹0.00</div>
+            <div style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <i class="fa-solid fa-shield-halved"></i> Secured Direct Settlement (LuxePay)
+            </div>
+            
+            <div id="upi-loader-content">
+                <div style="width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; margin-bottom: 12px;"></div>
+                <p style="font-size: 0.85rem; color: var(--text-muted);">Waiting for bank payment confirmation...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Interactive Scratch Card Modal -->
+    <div class="modal-overlay" id="modal-scratch-card" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 400px; text-align: center; padding: 30px;">
+            <h3 style="font-size: 1.5rem; margin-bottom: 10px; color: var(--accent);">🎁 Order Delivered!</h3>
+            <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 20px;">You've unlocked a mystery reward! Scratch the card below to reveal your deal.</p>
+            
+            <div class="scratch-card-wrapper" style="position: relative; width: 260px; height: 260px; margin: 0 auto 20px auto; border-radius: 16px; overflow: hidden; background: #111827; box-shadow: var(--shadow-premium);">
+                <div class="scratch-reward-content" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; z-index: 1; user-select: none; pointer-events: none;">
+                    <div style="font-size: 3rem; margin-bottom: 8px;">🎉</div>
+                    <h4 style="font-size: 1.2rem; color: var(--primary); font-weight: 700;">20% OFF next order!</h4>
+                    <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Use Code:</p>
+                    <div style="background: rgba(16,185,129,0.1); border: 1.5px dashed var(--primary); padding: 6px 16px; border-radius: 8px; font-weight: bold; color: var(--primary); font-size: 1.1rem; margin-top: 6px; letter-spacing: 1px;" id="scratch-code-text">LUXETREAT20</div>
+                </div>
+                <canvas id="scratch-canvas" width="260" height="260" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; z-index: 2; cursor: crosshair; transition: opacity 0.5s ease;"></canvas>
+            </div>
+            
+            <button class="btn-premium" id="btn-scratch-done" style="width: 100%;" disabled>Scratch card to reveal</button>
+        </div>
+    </div>
+    
+    <!-- System Notification Banner (Toast) -->
+    <div id="toast-notification" style="position: fixed; bottom: 24px; right: 24px; background: rgba(16,185,129,0.95); backdrop-filter: var(--glass-blur); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 16px 24px; border-radius: 12px; box-shadow: var(--shadow-premium); display: flex; align-items: center; gap: 12px; z-index: 3000; transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;">
+        <span id="toast-icon"><i class="fa-solid fa-circle-check"></i></span>
+        <span id="toast-message">Action completed successfully!</span>
+    </div>
+
+    <!-- Script Hooks -->
+    <script src="store.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>

@@ -154,7 +154,8 @@ document.addEventListener('DOMContentLoaded', () => {
         regPhone: document.getElementById('reg-phone'),
         regAddress: document.getElementById('reg-address'),
         linkToRegister: document.getElementById('link-to-register'),
-        linkToLogin: document.getElementById('link-to-login')
+        linkToLogin: document.getElementById('link-to-login'),
+        btnTrackActiveOrder: document.getElementById('btn-track-active-order')
     };
 
     // --- Customer Authentication Helpers ---
@@ -181,6 +182,26 @@ document.addEventListener('DOMContentLoaded', () => {
         } else {
             elements.authTriggerText.innerText = 'Sign In';
             elements.btnAuthTrigger.title = 'Login or Register';
+        }
+        await updateActiveOrderButtonVisibility();
+    }
+
+    async function updateActiveOrderButtonVisibility() {
+        if (!db.token) {
+            if (elements.btnTrackActiveOrder) elements.btnTrackActiveOrder.style.display = 'none';
+            return;
+        }
+        try {
+            const orders = await db.getOrders();
+            const activeOrder = orders.find(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+            if (activeOrder) {
+                if (elements.btnTrackActiveOrder) elements.btnTrackActiveOrder.style.display = 'inline-flex';
+            } else {
+                if (elements.btnTrackActiveOrder) elements.btnTrackActiveOrder.style.display = 'none';
+            }
+        } catch (err) {
+            console.error("Error checking active orders for button visibility:", err);
+            if (elements.btnTrackActiveOrder) elements.btnTrackActiveOrder.style.display = 'none';
         }
     }
 
@@ -1142,6 +1163,7 @@ document.addEventListener('DOMContentLoaded', () => {
         await updateTrackerTimeline();
         renderTrackerMap();
         startCancelGracePeriodTimer(order.id);
+        await updateActiveOrderButtonVisibility();
     }
 
     function animateRiderMarker() {
@@ -1469,20 +1491,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const { event, data } = JSON.parse(e.data);
             console.log("SSE event received on consumer storefront:", event, data);
             
-            if (event === 'orders_updated' && trackingOrder && data === trackingOrder.id) {
-                const fresh = await db.getOrderById(data);
-                if (fresh) {
-                    const prevStatus = trackingOrder.status;
-                    trackingOrder = fresh;
-                    
-                    await updateTrackerTimeline();
-                    renderTrackerMap();
-                    
-                    if (fresh.status === 'Out for Delivery' && prevStatus !== 'Out for Delivery') {
-                        animateRiderMarker();
-                    }
-                    if (fresh.status === 'Delivered' && !scratchCardClaimed) {
-                        handleOrderDelivered(fresh);
+            if (event === 'orders_updated') {
+                await updateActiveOrderButtonVisibility();
+                if (trackingOrder && data === trackingOrder.id) {
+                    const fresh = await db.getOrderById(data);
+                    if (fresh) {
+                        const prevStatus = trackingOrder.status;
+                        trackingOrder = fresh;
+                        
+                        await updateTrackerTimeline();
+                        renderTrackerMap();
+                        
+                        if (fresh.status === 'Out for Delivery' && prevStatus !== 'Out for Delivery') {
+                            animateRiderMarker();
+                        }
+                        if (fresh.status === 'Delivered' && !scratchCardClaimed) {
+                            handleOrderDelivered(fresh);
+                        }
                     }
                 }
             }
@@ -1511,6 +1536,24 @@ document.addEventListener('DOMContentLoaded', () => {
         e.preventDefault();
         await switchView('landing');
     });
+
+    if (elements.btnTrackActiveOrder) {
+        elements.btnTrackActiveOrder.addEventListener('click', async () => {
+            try {
+                const orders = await db.getOrders();
+                const activeOrder = orders.find(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+                if (activeOrder) {
+                    await startOrderTracking(activeOrder);
+                    await switchView('order-tracker');
+                } else {
+                    showToast("No active order found to track.", "info");
+                    elements.btnTrackActiveOrder.style.display = 'none';
+                }
+            } catch (err) {
+                console.error("Error tracking active order from nav:", err);
+            }
+        });
+    }
 
     elements.btnCart.addEventListener('click', async () => {
         await renderCart();
@@ -1753,6 +1796,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             trackingOrder = null;
             await switchView('landing');
+            await updateActiveOrderButtonVisibility();
         }
     });
 
@@ -1760,6 +1804,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnTrackerDone.addEventListener('click', async () => {
         trackingOrder = null;
         await switchView('landing');
+        await updateActiveOrderButtonVisibility();
     });
 
     elements.btnScratchDone.addEventListener('click', () => {

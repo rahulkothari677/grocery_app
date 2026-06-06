@@ -427,7 +427,11 @@ document.addEventListener('DOMContentLoaded', () => {
             return;
         }
 
+        const seenIds = new Set();
         storeOrders.forEach(order => {
+            if (seenIds.has(order.id)) return;
+            seenIds.add(order.id);
+
             const card = document.createElement('div');
             card.className = 'glass-card owner-order-card';
 

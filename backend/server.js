@@ -379,13 +379,16 @@ app.post('/api/auth/login', (req, res) => {
     const emailLower = email.toLowerCase().trim();
     const user = dbData.users.find(u => u.email.toLowerCase() === emailLower);
     if (!user) {
+        console.log(`[AUTH FAIL] User with email ${emailLower} not found.`);
         return res.status(401).json({ error: 'Invalid email or password' });
     }
     
     const valid = bcrypt.compareSync(password, user.password);
     if (!valid) {
+        console.log(`[AUTH FAIL] Incorrect password for user ${emailLower}.`);
         return res.status(401).json({ error: 'Invalid email or password' });
     }
+    console.log(`[AUTH SUCCESS] User ${emailLower} logged in.`);
     
     if (user.role === 'merchant' && !user.storeId) {
         const store = dbData.stores.find(s => s.ownerEmail === emailLower);

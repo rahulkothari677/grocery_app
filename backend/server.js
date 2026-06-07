@@ -1,5 +1,6 @@
 // server.js - LuxeGrocer Node.js/Express Backend Server
 require('dotenv').config();
+process.env.NODE_ENV = process.env.NODE_ENV || 'development';
 const express = require('express');
 const cors = require('cors');
 const fs = require('fs');

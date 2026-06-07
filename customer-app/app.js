@@ -1,6 +1,30 @@
 // app.js - LuxeGrocer Consumer-Centric Client-Side Controller
 
+// Intercept console.error to log to server
+const originalConsoleError = console.error;
+console.error = function(...args) {
+    originalConsoleError.apply(console, args);
+    fetch('http://localhost:5000/api/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'customer-app console.error', error: args.join(' ') })
+    }).catch(() => {});
+};
+
 window.addEventListener('error', (event) => {
+    const errData = {
+        message: event.message,
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+        stack: event.error ? event.error.stack : ''
+    };
+    fetch('http://localhost:5000/api/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: 'customer-app window.onerror', error: errData })
+    }).catch(() => {});
+
     const errDiv = document.createElement('div');
     errDiv.style.position = 'fixed';
     errDiv.style.top = '0';
@@ -23,6 +47,33 @@ window.addEventListener('error', (event) => {
     }
 });
 
+// Event Logging Hooks for Debugging
+document.addEventListener('click', (e) => {
+    fetch('http://localhost:5000/api/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            source: 'customer-app CLICK',
+            tagName: e.target.tagName,
+            id: e.target.id,
+            className: e.target.className,
+            text: e.target.innerText ? e.target.innerText.substring(0, 30) : ''
+        })
+    }).catch(() => {});
+});
+
+document.addEventListener('submit', (e) => {
+    fetch('http://localhost:5000/api/debug-log', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+            source: 'customer-app SUBMIT',
+            id: e.target.id,
+            emailVal: e.target.querySelector('input[type="email"]') ? e.target.querySelector('input[type="email"]').value : 'not_found'
+        })
+    }).catch(() => {});
+});
+
 document.addEventListener('DOMContentLoaded', () => {
     // --- Application State ---
     let currentView = 'landing';
@@ -34,6 +85,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let driverProgress = 0;
     let scratchCardClaimed = false;
     let lastDeliveredOrder = null;
+    let customerChatOpen = false;
 
     // Grace cancellation timer state
     let cancelGraceTimer = null;
@@ -43,6 +95,8 @@ document.addEventListener('DOMContentLoaded', () => {
     let appliedVoucher = null;
     let filterOpenOnly = false;
     let storeSortBy = 'distance';
+    let checkoutCustomerData = null;
+    let checkoutDiscount = 0;
 
     // --- DOM Elements Cache ---
     const elements = {
@@ -52,6 +106,7 @@ document.addEventListener('DOMContentLoaded', () => {
         btnChangeLocation: document.getElementById('btn-change-location'),
         btnCart: document.getElementById('btn-cart'),
         cartBadge: document.getElementById('cart-badge'),
+        btnThemeToggle: document.getElementById('btn-theme-toggle'),
 
         // View panels
         viewLanding: document.getElementById('view-landing'),
@@ -137,6 +192,23 @@ document.addEventListener('DOMContentLoaded', () => {
         btnCancelOrder: document.getElementById('btn-cancel-order'),
         trackerOtpCode: document.getElementById('tracker-otp-code'),
         trackerOtpBox: document.getElementById('tracker-otp-box'),
+        trackerRiderBox: document.getElementById('tracker-rider-box'),
+        trackerRiderName: document.getElementById('tracker-rider-name'),
+        btnCallRider: document.getElementById('btn-call-rider'),
+
+        // Substitution and Chat Elements
+        trackerSubstitutionBox: document.getElementById('tracker-substitution-box'),
+        trackerSubstitutionText: document.getElementById('tracker-substitution-text'),
+        btnTrackerDeclineSub: document.getElementById('btn-tracker-decline-sub'),
+        btnTrackerAcceptSub: document.getElementById('btn-tracker-accept-sub'),
+        trackerChatBox: document.getElementById('tracker-chat-box'),
+        btnToggleCustomerChat: document.getElementById('btn-toggle-customer-chat'),
+        customerChatBadge: document.getElementById('customer-chat-badge'),
+        customerChatChevron: document.getElementById('customer-chat-chevron'),
+        customerChatDrawer: document.getElementById('customer-chat-drawer'),
+        customerChatMessages: document.getElementById('customer-chat-messages'),
+        customerChatForm: document.getElementById('customer-chat-form'),
+        customerChatInput: document.getElementById('customer-chat-input'),
 
         // Modals
         modalLocationElement: document.getElementById('modal-location-element'),
@@ -152,7 +224,12 @@ document.addEventListener('DOMContentLoaded', () => {
         modalUpiPayment: document.getElementById('modal-upi-payment'),
         btnCloseUpiModal: document.getElementById('btn-close-upi-modal'),
         upiGrandTotal: document.getElementById('upi-grand-total'),
-        upiLoaderContent: document.getElementById('upi-loader-content'),
+        upiQrImage: document.getElementById('upi-qr-image'),
+        upiPayeeVpa: document.getElementById('upi-payee-vpa'),
+        upiPayeeName: document.getElementById('upi-payee-name'),
+        upiTransactionId: document.getElementById('upi-transaction-id'),
+        formUpiPaymentConfirmation: document.getElementById('form-upi-payment-confirmation'),
+        btnSubmitUpiTransaction: document.getElementById('btn-submit-upi-transaction'),
         
         modalScratchCard: document.getElementById('modal-scratch-card'),
         scratchCodeText: document.getElementById('scratch-code-text'),
@@ -184,6 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
         linkToRegister: document.getElementById('link-to-register'),
         linkToLogin: document.getElementById('link-to-login'),
         btnTrackActiveOrder: document.getElementById('btn-track-active-order'),
+        regReferral: document.getElementById('reg-referral'),
         
         // Password Recovery
         linkForgotPassword: document.getElementById('link-forgot-password'),
@@ -214,12 +292,23 @@ document.addEventListener('DOMContentLoaded', () => {
         tabBtnAddresses: document.getElementById('tab-btn-addresses'),
         tabBtnHistory: document.getElementById('tab-btn-history'),
         tabBtnVouchers: document.getElementById('tab-btn-vouchers'),
+        tabBtnWallet: document.getElementById('tab-btn-wallet'),
 
         // Account tab panes
         paneAccountProfile: document.getElementById('pane-account-profile'),
         paneAccountAddresses: document.getElementById('pane-account-addresses'),
         paneAccountHistory: document.getElementById('pane-account-history'),
         paneAccountVouchers: document.getElementById('pane-account-vouchers'),
+        paneAccountWallet: document.getElementById('pane-account-wallet'),
+        accountWalletBalance: document.getElementById('account-wallet-balance'),
+        formAddFunds: document.getElementById('form-add-funds'),
+        walletAddAmount: document.getElementById('wallet-add-amount'),
+
+        // Checkout Wallet elements
+        checkoutWalletBalanceVal: document.getElementById('checkout-wallet-balance-val'),
+        checkoutWalletSplitBox: document.getElementById('checkout-wallet-split-box'),
+        checkoutSplitWalletApplied: document.getElementById('checkout-split-wallet-applied'),
+        checkoutSplitRemaining: document.getElementById('checkout-split-remaining'),
 
         // Profile Form
         formAccountProfile: document.getElementById('form-account-profile'),
@@ -288,6 +377,12 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.accountProfileName.value = user.name;
             elements.accountProfilePhone.value = user.phone || '';
             elements.accountProfileEmail.value = user.email;
+            
+            const referralCodeVal = user.referralCode || 'N/A';
+            const referralDisplayElement = document.getElementById('account-referral-code');
+            if (referralDisplayElement) {
+                referralDisplayElement.innerText = referralCodeVal;
+            }
 
             // Load saved addresses and populate dropdown
             await populateCheckoutAddressSelect();
@@ -321,6 +416,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.tabBtnAddresses.classList.remove('active');
         elements.tabBtnHistory.classList.remove('active');
         elements.tabBtnVouchers.classList.remove('active');
+        if (elements.tabBtnWallet) elements.tabBtnWallet.classList.remove('active');
 
         // Set text colors
         elements.tabBtnProfile.style.color = 'var(--text-muted)';
@@ -331,12 +427,17 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.tabBtnHistory.style.borderBottomColor = 'transparent';
         elements.tabBtnVouchers.style.color = 'var(--text-muted)';
         elements.tabBtnVouchers.style.borderBottomColor = 'transparent';
+        if (elements.tabBtnWallet) {
+            elements.tabBtnWallet.style.color = 'var(--text-muted)';
+            elements.tabBtnWallet.style.borderBottomColor = 'transparent';
+        }
 
         // Hide all panes
         elements.paneAccountProfile.style.display = 'none';
         elements.paneAccountAddresses.style.display = 'none';
         elements.paneAccountHistory.style.display = 'none';
         elements.paneAccountVouchers.style.display = 'none';
+        if (elements.paneAccountWallet) elements.paneAccountWallet.style.display = 'none';
 
         // Show targets
         const activeBtn = document.getElementById(`tab-btn-${tabName}`);
@@ -358,7 +459,16 @@ document.addEventListener('DOMContentLoaded', () => {
             renderOrderHistory();
         } else if (tabName === 'vouchers') {
             renderVouchers();
+        } else if (tabName === 'wallet') {
+            renderWallet();
         }
+    }
+
+    async function renderWallet() {
+        if (!elements.accountWalletBalance) return;
+        elements.accountWalletBalance.innerText = 'Loading...';
+        const balance = await db.getWalletBalance();
+        elements.accountWalletBalance.innerText = `₹${parseFloat(balance || 0).toFixed(2)}`;
     }
 
     async function renderAddresses() {
@@ -442,6 +552,9 @@ document.addEventListener('DOMContentLoaded', () => {
             const discountHtml = order.discount && order.discount > 0
                 ? `<div style="font-size: 0.75rem; color: var(--secondary); margin-top: 4px; text-align: left;">Voucher Discount: -₹${order.discount.toFixed(2)}</div>`
                 : '';
+            const utrHtml = order.customer && order.customer.payment === 'upi' && order.customer.transactionId
+                ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; text-align: left;">UPI Ref: <span style="font-family: monospace; font-weight: bold;">${order.customer.transactionId}</span></div>`
+                : '';
             
             card.innerHTML = `
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px; border-bottom: 1px dashed var(--border-color); padding-bottom: 8px;">
@@ -458,6 +571,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     <div style="text-align: left;">
                         <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">₹${(order.subtotal + order.deliveryFee - (order.discount || 0)).toFixed(2)}</span>
                         ${discountHtml}
+                        ${utrHtml}
                     </div>
                     <button class="btn-premium btn-reorder" id="${reorderBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px;"><i class="fa-solid fa-rotate-left"></i> Reorder</button>
                 </div>
@@ -620,7 +734,8 @@ document.addEventListener('DOMContentLoaded', () => {
             role: 'customer',
             name: elements.regName.value.trim(),
             phone: elements.regPhone.value.trim(),
-            address: elements.regAddress.value.trim()
+            address: elements.regAddress.value.trim(),
+            referralCode: elements.regReferral ? elements.regReferral.value.trim() : ''
         };
 
         const res = await db.register(registerData);
@@ -996,7 +1111,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'glass-card store-card';
             const isClosed = store.status === 'Closed';
-            if (isClosed) {
+            const isSuspended = store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended');
+            if (isClosed || isSuspended) {
                 card.style.opacity = '0.65';
                 card.style.filter = 'grayscale(0.7)';
             }
@@ -1004,7 +1120,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.innerHTML = `
                 <div class="store-banner-wrapper" style="position: relative;">
-                    ${isClosed ? `<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: 12px 12px 0 0;"><span style="color: white; font-weight: 800; letter-spacing: 1.5px; font-size: 0.95rem; border: 1.5px solid white; padding: 4px 12px; border-radius: 4px; background: rgba(239, 68, 68, 0.75);">CLOSED</span></div>` : ''}
+                    ${isSuspended ? `<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: 12px 12px 0 0;"><span style="color: white; font-weight: 800; letter-spacing: 1.5px; font-size: 0.95rem; border: 1.5px solid white; padding: 4px 12px; border-radius: 4px; background: rgba(220, 38, 38, 0.85);">SUSPENDED</span></div>` : (isClosed ? `<div style="position: absolute; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 5; border-radius: 12px 12px 0 0;"><span style="color: white; font-weight: 800; letter-spacing: 1.5px; font-size: 0.95rem; border: 1.5px solid white; padding: 4px 12px; border-radius: 4px; background: rgba(239, 68, 68, 0.75);">CLOSED</span></div>` : '')}
                     <img class="store-banner-img" src="${store.image}" alt="${store.name}">
                     <div class="store-overlay"></div>
                     <span class="store-badge">${store.category}</span>
@@ -1019,7 +1135,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     </div>
                     <div class="store-info-tags">
                         <span class="store-info-tag"><i class="fa-solid fa-person-biking"></i> ${store.distance} km away</span>
-                        <span class="store-info-tag" style="color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed ? '#ef4444' : '#10b981'}; animation: ${isClosed ? 'none' : 'pulse 1.5s infinite'};"></i> <strong>${isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins'}</strong></span>
+                        <span class="store-info-tag" style="color: var(--secondary); display: inline-flex; align-items: center; gap: 5px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed || isSuspended ? '#ef4444' : '#10b981'}; animation: ${isClosed || isSuspended ? 'none' : 'pulse 1.5s infinite'};"></i> <strong>${isSuspended ? 'Suspended' : (isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins')}</strong></span>
                     </div>
                     <div class="store-address"><i class="fa-solid fa-map-pin"></i> ${store.address}</div>
                 </div>
@@ -1201,8 +1317,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const isFav = getFavorites().includes(store.id);
         const isClosed = store.status === 'Closed';
+        const isSuspended = store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended');
+        
+        let warningBannerHtml = '';
+        if (isSuspended) {
+            warningBannerHtml = `
+                <div class="glass-panel" style="background: rgba(220, 38, 38, 0.08); border: 1.5px solid rgba(220, 38, 38, 0.25); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; color: #fca5a5; font-size: 0.88rem; line-height: 1.45;">
+                    <span style="font-size: 1.8rem; flex-shrink: 0;">⚠️</span>
+                    <div>
+                        <strong>Store Operations Temporarily Suspended:</strong> This storefront is currently offline as the owner's billing plan subscription has expired. Catalog browsing is open, but adding items to cart and placing checkouts are temporarily disabled.
+                    </div>
+                </div>
+            `;
+        }
+
         elements.storeProfileHeaderContainer.innerHTML = `
-            <div class="store-profile-header" style="${isClosed ? 'filter: grayscale(0.4); opacity: 0.85;' : ''}">
+            ${warningBannerHtml}
+            <div class="store-profile-header" style="${isClosed || isSuspended ? 'filter: grayscale(0.4); opacity: 0.85;' : ''}">
                 <img class="store-header-banner" src="${store.image}" alt="${store.name}">
                 <div class="store-header-overlay"></div>
                 <div class="store-header-content">
@@ -1214,7 +1345,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                     <i class="${isFav ? 'fa-solid' : 'fa-regular'} fa-heart" style="font-size: 1.1rem;"></i>
                                 </button>
                             </h1>
-                            ${isClosed ? `<span style="background: #ef4444; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; letter-spacing: 1px;">CLOSED OFFLINE</span>` : ''}
+                            ${isSuspended ? `<span style="background: #dc2626; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; letter-spacing: 1px;">SUSPENDED</span>` : (isClosed ? `<span style="background: #ef4444; color: white; padding: 4px 10px; border-radius: 6px; font-weight: 700; font-size: 0.8rem; letter-spacing: 1px;">CLOSED OFFLINE</span>` : '')}
                         </div>
                         <p><i class="fa-solid fa-map-pin"></i> ${store.address} | <i class="fa-solid fa-phone"></i> ${store.phone}</p>
                     </div>
@@ -1224,7 +1355,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             <span>Rating</span>
                         </div>
                         <div class="store-stat-box">
-                            <h4 style="color: ${isClosed ? 'var(--danger)' : 'var(--secondary)'}; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed ? '#ef4444' : '#10b981'}; ${isClosed ? '' : 'animation: pulse 1.5s infinite;'}"></i> ${isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins'}</h4>
+                            <h4 style="color: ${isClosed || isSuspended ? 'var(--danger)' : 'var(--secondary)'}; display: inline-flex; align-items: center; justify-content: center; gap: 4px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: ${isClosed || isSuspended ? '#ef4444' : '#10b981'}; ${isClosed || isSuspended ? '' : 'animation: pulse 1.5s infinite;'}"></i> ${isSuspended ? 'Suspended' : (isClosed ? 'Offline' : Math.round(store.distance * 3 + 5) + ' Mins')}</h4>
                             <span>ETA (${store.distance} km)</span>
                         </div>
                         <div class="store-stat-box">
@@ -1309,6 +1440,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 : `₹${prod.price.toFixed(2)}`;
             
             const isClosed = activeStore && activeStore.status === 'Closed';
+            const isSuspended = activeStore && (activeStore.status === 'Suspended' || (activeStore.subscription && activeStore.subscription.status === 'Suspended'));
             
             let variantSelectorHtml = '';
             if (prod.variants && prod.variants.length > 0) {
@@ -1335,8 +1467,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div class="product-footer">
                     <div class="product-price" id="price-tag-${prod.id}">${priceHtml}</div>
-                    <button class="btn-premium btn-add-cart" ${prod.stock === 0 || isClosed ? 'disabled' : ''}>
-                        ${isClosed ? 'Closed' : '<i class="fa-solid fa-cart-plus"></i> Add'}
+                    <button class="btn-premium btn-add-cart" ${prod.stock === 0 || isClosed || isSuspended ? 'disabled' : ''}>
+                        ${isSuspended ? 'Suspended' : (isClosed ? 'Closed' : '<i class="fa-solid fa-cart-plus"></i> Add')}
                     </button>
                 </div>
             `;
@@ -1426,20 +1558,16 @@ document.addEventListener('DOMContentLoaded', () => {
             variant = null;
         }
 
-        if (cart.length > 0 && cart[0].storeId !== storeId) {
-            const oldStore = cart[0].storeName;
-            const confirmChange = confirm(`Your cart contains items from "${oldStore}". Would you like to clear your cart to add items from the new store?`);
-            if (confirmChange) {
-                cart = [];
-            } else {
+        const store = await db.getStoreById(storeId);
+        if (store) {
+            if (store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended')) {
+                showToast("This store has been temporarily suspended by the platform.", "error");
                 return;
             }
-        }
-
-        const store = await db.getStoreById(storeId);
-        if (store && store.status === 'Closed') {
-            showToast("This store is currently closed/offline. You cannot order from here.", "error");
-            return;
+            if (store.status === 'Closed') {
+                showToast("This store is currently closed/offline. You cannot order from here.", "error");
+                return;
+            }
         }
 
         // If product has variants, and none is supplied, default to the first variant
@@ -1569,47 +1697,89 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.cartSavingsBox.style.display = 'block';
         let subtotal = 0;
         
+        // Group cart items by store
+        const groups = {};
         cart.forEach(item => {
-            const cost = item.price * item.quantity;
-            subtotal += cost;
+            if (!groups[item.storeId]) {
+                groups[item.storeId] = {
+                    storeId: item.storeId,
+                    storeName: item.storeName,
+                    storeDistance: item.storeDistance,
+                    items: [],
+                    subtotal: 0
+                };
+            }
+            groups[item.storeId].items.push(item);
+            groups[item.storeId].subtotal += item.price * item.quantity;
+            subtotal += item.price * item.quantity;
+        });
 
-            const div = document.createElement('div');
-            div.className = 'cart-item';
-            
-            const hasImage = item.image && item.image.trim() !== '';
-            const visualContent = hasImage
-                ? `<img src="${item.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;" alt="${item.name}">`
-                : item.emoji;
-
-            div.innerHTML = `
-                <div class="cart-item-emoji">${visualContent}</div>
-                <div class="cart-item-details">
-                    <h4>${item.name}</h4>
-                    <span class="shop-name">${item.storeName} | ${item.unit}</span>
-                    <div class="price">₹${item.price.toFixed(2)}</div>
-                </div>
-                <div class="cart-item-quantity">
-                    <button class="cart-qty-btn decrease-qty" data-id="${item.id}">-</button>
-                    <span>${item.quantity}</span>
-                    <button class="cart-qty-btn increase-qty" data-id="${item.id}">+</button>
-                </div>
+        // Render groups
+        Object.values(groups).forEach(group => {
+            // Group Header
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'cart-store-group-header';
+            groupHeader.style.padding = '8px 12px';
+            groupHeader.style.background = 'rgba(255, 255, 255, 0.04)';
+            groupHeader.style.fontSize = '0.8rem';
+            groupHeader.style.fontWeight = 'bold';
+            groupHeader.style.color = 'var(--primary)';
+            groupHeader.style.display = 'flex';
+            groupHeader.style.justifyContent = 'space-between';
+            groupHeader.style.alignItems = 'center';
+            groupHeader.style.borderRadius = '6px';
+            groupHeader.style.marginTop = '12px';
+            groupHeader.style.marginBottom = '6px';
+            groupHeader.innerHTML = `
+                <span><i class="fa-solid fa-store"></i> ${group.storeName}</span>
+                <span style="font-size: 0.7rem; color: var(--text-muted); font-weight: normal;">${group.storeDistance.toFixed(1)} km</span>
             `;
+            elements.cartItemsWrapper.appendChild(groupHeader);
 
-            div.querySelector('.decrease-qty').addEventListener('click', () => updateQuantity(item.id, 'decrease'));
-            div.querySelector('.increase-qty').addEventListener('click', () => updateQuantity(item.id, 'increase'));
+            group.items.forEach(item => {
+                const div = document.createElement('div');
+                div.className = 'cart-item';
+                
+                const hasImage = item.image && item.image.trim() !== '';
+                const visualContent = hasImage
+                    ? `<img src="${item.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 8px;" alt="${item.name}">`
+                    : item.emoji;
 
-            elements.cartItemsWrapper.appendChild(div);
+                div.innerHTML = `
+                    <div class="cart-item-emoji">${visualContent}</div>
+                    <div class="cart-item-details">
+                        <h4>${item.name}</h4>
+                        <span class="shop-name">${item.unit}</span>
+                        <div class="price">₹${item.price.toFixed(2)}</div>
+                    </div>
+                    <div class="cart-item-quantity">
+                        <button class="cart-qty-btn decrease-qty" data-id="${item.id}">-</button>
+                        <span>${item.quantity}</span>
+                        <button class="cart-qty-btn increase-qty" data-id="${item.id}">+</button>
+                    </div>
+                `;
+
+                div.querySelector('.decrease-qty').addEventListener('click', () => updateQuantity(item.id, 'decrease'));
+                div.querySelector('.increase-qty').addEventListener('click', () => updateQuantity(item.id, 'increase'));
+
+                elements.cartItemsWrapper.appendChild(div);
+            });
+        });
+
+        // Compute total delivery fee (sum of delivery fees of each store)
+        let deliveryFee = 0;
+        Object.values(groups).forEach(group => {
+            deliveryFee += db.getDeliveryFee(group.storeDistance, group.subtotal);
         });
 
         // Compute dynamic free delivery indicator progress
         const FREE_DELIVERY_THRESHOLD = 300;
-        let deliveryFee = db.getDeliveryFee(cart[0].storeDistance, subtotal);
-        
         if (subtotal >= FREE_DELIVERY_THRESHOLD) {
             elements.savingsValue.innerText = "UNLOCKED! 🎉";
             elements.savingsValue.style.color = "var(--primary)";
             elements.savingsProgressBar.style.width = "100%";
             elements.savingsMsg.innerHTML = "You saved delivery fees! Enjoy <strong>FREE store-to-door delivery</strong>.";
+            deliveryFee = 0.00;
         } else {
             const missing = FREE_DELIVERY_THRESHOLD - subtotal;
             const pct = (subtotal / FREE_DELIVERY_THRESHOLD) * 100;
@@ -1628,35 +1798,52 @@ document.addEventListener('DOMContentLoaded', () => {
         // Smart Upsell paired calculations
         const store = await db.getStoreById(cart[0].storeId);
         if (store) {
-            const availableUpsells = store.products.filter(p => !cart.some(item => item.id === p.id) && p.stock > 0);
+            let topUpsells = [];
+            try {
+                const productIds = cart.map(item => item.id).join(',');
+                const res = await fetch(`${db.baseUrl}/recommendations/frequently-bought-together?productIds=${encodeURIComponent(productIds)}&limit=5`);
+                if (res.ok) {
+                    const recs = await res.json();
+                    topUpsells = recs
+                        .filter(r => r.storeId === store.id && !cart.some(item => item.id === r.id))
+                        .slice(0, 3);
+                }
+            } catch (err) {
+                console.error("Failed to fetch upsells from backend, falling back to local scoring:", err);
+            }
             
-            if (availableUpsells.length > 0) {
-                const scored = availableUpsells.map(p => {
-                    let score = 0;
-                    const hasMilk = cart.some(item => item.name.toLowerCase().includes('milk'));
-                    if (hasMilk) {
-                        if (p.name.toLowerCase().includes('butter') || p.name.toLowerCase().includes('sourdough') || p.name.toLowerCase().includes('bread') || p.name.toLowerCase().includes('croissant')) {
-                            score += 10;
+            if (topUpsells.length === 0) {
+                const availableUpsells = store.products.filter(p => !cart.some(item => item.id === p.id) && p.stock > 0);
+                if (availableUpsells.length > 0) {
+                    const scored = availableUpsells.map(p => {
+                        let score = 0;
+                        const hasMilk = cart.some(item => item.name.toLowerCase().includes('milk'));
+                        if (hasMilk) {
+                            if (p.name.toLowerCase().includes('butter') || p.name.toLowerCase().includes('sourdough') || p.name.toLowerCase().includes('bread') || p.name.toLowerCase().includes('croissant')) {
+                                score += 10;
+                            }
                         }
-                    }
-                    const hasFruit = cart.some(item => item.category === 'fruits' || item.name.toLowerCase().includes('apple') || item.name.toLowerCase().includes('mango'));
-                    if (hasFruit) {
-                        if (p.name.toLowerCase().includes('yogurt') || p.name.toLowerCase().includes('curd')) {
-                            score += 10;
+                        const hasFruit = cart.some(item => item.category === 'fruits' || item.name.toLowerCase().includes('apple') || item.name.toLowerCase().includes('mango'));
+                        if (hasFruit) {
+                            if (p.name.toLowerCase().includes('yogurt') || p.name.toLowerCase().includes('curd')) {
+                                score += 10;
+                            }
                         }
-                    }
-                    if (p.badgeText && (p.badgeText.toLowerCase().includes('best') || p.badgeText.toLowerCase().includes('pop') || p.badgeText.toLowerCase().includes('fresh'))) {
-                        score += 5;
-                    }
-                    if (p.rating > 4.7) {
-                        score += 3;
-                    }
-                    return { product: p, score };
-                });
+                        if (p.badgeText && (p.badgeText.toLowerCase().includes('best') || p.badgeText.toLowerCase().includes('pop') || p.badgeText.toLowerCase().includes('fresh'))) {
+                            score += 5;
+                        }
+                        if (p.rating > 4.7) {
+                            score += 3;
+                        }
+                        return { product: p, score };
+                    });
 
-                scored.sort((a, b) => b.score - a.score);
-                const topUpsells = scored.slice(0, 3).map(s => s.product);
+                    scored.sort((a, b) => b.score - a.score);
+                    topUpsells = scored.slice(0, 3).map(s => s.product);
+                }
+            }
 
+            if (topUpsells.length > 0) {
                 elements.cartUpsellListWrapper.innerHTML = '';
                 topUpsells.forEach(prod => {
                     const card = document.createElement('div');
@@ -1698,49 +1885,105 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cart.length === 0) return;
 
         let subtotal = 0;
+        const groups = {};
         cart.forEach(item => {
-            const cost = item.price * item.quantity;
-            subtotal += cost;
-
-            const hasImage = item.image && item.image.trim() !== '';
-            const visualContent = hasImage
-                ? `<img src="${item.image}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px;" alt="${item.name}">`
-                : `<span style="font-size: 1.2rem; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">${item.emoji}</span>`;
-
-            const div = document.createElement('div');
-            div.style.display = 'flex';
-            div.style.justifyContent = 'space-between';
-            div.style.alignItems = 'center';
-            div.innerHTML = `
-                <div style="display:flex; align-items:center; gap: 10px;">
-                    ${visualContent}
-                    <div style="text-align: left;">
-                        <span style="font-size: 0.95rem; font-weight: 500;">${item.name}</span>
-                        <br><span style="font-size: 0.75rem; color: var(--text-muted);">${item.quantity} x ₹${item.price.toFixed(2)} (${item.unit})</span>
-                    </div>
-                </div>
-                <span style="font-size: 0.95rem; font-weight: 600;">₹${cost.toFixed(2)}</span>
-            `;
-            elements.checkoutItemsList.appendChild(div);
+            if (!groups[item.storeId]) {
+                groups[item.storeId] = {
+                    storeId: item.storeId,
+                    storeName: item.storeName,
+                    storeDistance: item.storeDistance,
+                    items: [],
+                    subtotal: 0
+                };
+            }
+            groups[item.storeId].items.push(item);
+            groups[item.storeId].subtotal += item.price * item.quantity;
+            subtotal += item.price * item.quantity;
         });
 
-        // Calculate delivery fee
-        const distance = cart[0].storeDistance;
-        let deliveryFee = db.getDeliveryFee(distance, subtotal);
+        // Render grouping in summary
+        Object.values(groups).forEach(group => {
+            const groupHeader = document.createElement('div');
+            groupHeader.className = 'checkout-store-group-header';
+            groupHeader.style.padding = '6px 10px';
+            groupHeader.style.background = 'rgba(255, 255, 255, 0.03)';
+            groupHeader.style.fontSize = '0.85rem';
+            groupHeader.style.fontWeight = 'bold';
+            groupHeader.style.color = 'var(--primary)';
+            groupHeader.style.marginTop = '10px';
+            groupHeader.style.marginBottom = '6px';
+            groupHeader.style.borderRadius = '6px';
+            groupHeader.style.display = 'flex';
+            groupHeader.style.justifyContent = 'space-between';
+            groupHeader.innerHTML = `
+                <span><i class="fa-solid fa-store"></i> ${group.storeName}</span>
+                <span style="font-size:0.75rem; color:var(--text-muted); font-weight:normal;">(${group.storeDistance.toFixed(1)} km)</span>
+            `;
+            elements.checkoutItemsList.appendChild(groupHeader);
 
+            group.items.forEach(item => {
+                const cost = item.price * item.quantity;
+                const hasImage = item.image && item.image.trim() !== '';
+                const visualContent = hasImage
+                    ? `<img src="${item.image}" style="width: 32px; height: 32px; object-fit: cover; border-radius: 6px;" alt="${item.name}">`
+                    : `<span style="font-size: 1.2rem; width: 32px; height: 32px; display: inline-flex; align-items: center; justify-content: center;">${item.emoji}</span>`;
+
+                const div = document.createElement('div');
+                div.style.display = 'flex';
+                div.style.justifyContent = 'space-between';
+                div.style.alignItems = 'center';
+                div.style.padding = '4px 8px';
+                div.innerHTML = `
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        ${visualContent}
+                        <div style="text-align: left;">
+                            <span style="font-size: 0.95rem; font-weight: 500;">${item.name}</span>
+                            <br><span style="font-size: 0.75rem; color: var(--text-muted);">${item.quantity} x ₹${item.price.toFixed(2)} (${item.unit})</span>
+                        </div>
+                    </div>
+                    <span style="font-size: 0.95rem; font-weight: 600;">₹${cost.toFixed(2)}</span>
+                `;
+                elements.checkoutItemsList.appendChild(div);
+            });
+        });
+
+        // Compute total delivery fee
+        let deliveryFee = 0;
+        Object.values(groups).forEach(group => {
+            deliveryFee += db.getDeliveryFee(group.storeDistance, group.subtotal);
+        });
+
+        // Check cumulative free delivery progress
+        const FREE_DELIVERY_THRESHOLD = 300;
         let discount = 0;
+        if (subtotal >= FREE_DELIVERY_THRESHOLD) {
+            deliveryFee = 0.00;
+        }
+
         if (appliedVoucher) {
-            if (subtotal < appliedVoucher.minOrderValue) {
+            const storeSubtotals = {};
+            cart.forEach(item => {
+                storeSubtotals[item.storeId] = (storeSubtotals[item.storeId] || 0) + (item.price * item.quantity);
+            });
+            
+            const matchingSubtotal = appliedVoucher.storeId ? (storeSubtotals[appliedVoucher.storeId] || 0) : subtotal;
+            
+            if (matchingSubtotal < appliedVoucher.minOrderValue) {
                 appliedVoucher = null;
                 elements.couponAppliedMsg.style.display = 'none';
                 elements.couponErrorMsg.style.display = 'block';
                 elements.couponErrorMsg.innerText = `Coupon removed: Requires min purchase of ₹${appliedVoucher.minOrderValue}`;
             } else {
                 if (appliedVoucher.discountType === 'fixed') {
-                    discount = Math.min(appliedVoucher.value, subtotal);
+                    discount = Math.min(appliedVoucher.value, matchingSubtotal);
                 } else if (appliedVoucher.discountType === 'free-delivery') {
-                    discount = deliveryFee;
-                    deliveryFee = 0.00;
+                    if (appliedVoucher.storeId) {
+                        const group = groups[appliedVoucher.storeId];
+                        discount = group ? db.getDeliveryFee(group.storeDistance, group.subtotal) : 0;
+                    } else {
+                        discount = deliveryFee;
+                    }
+                    deliveryFee = Math.max(0, deliveryFee - discount);
                 }
             }
         }
@@ -1770,11 +2013,15 @@ document.addEventListener('DOMContentLoaded', () => {
         const store = await db.getStoreById(cart[0].storeId);
         const minOrderVal = store ? (store.minOrderValue || 0) : 0;
         const maxRadius = store ? (store.deliveryRadius || 5.0) : 5.0;
+        const isSuspended = store && (store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended'));
         
         let blockCheckout = false;
         let warningText = "";
 
-        if (subtotal < minOrderVal) {
+        if (isSuspended) {
+            blockCheckout = true;
+            warningText = "This store has been temporarily suspended by the platform.";
+        } else if (subtotal < minOrderVal) {
             blockCheckout = true;
             warningText = `Minimum order for this store is ₹${minOrderVal}. Add ₹${(minOrderVal - subtotal).toFixed(0)} more.`;
         } else if (distance > maxRadius) {
@@ -1795,6 +2042,31 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.btnSubmitOrder.innerHTML = 'Place Delivery Order';
             elements.btnSubmitOrder.style.fontSize = '';
         }
+
+        // Wallet Balance & Split Setup
+        const walletBalance = await db.getWalletBalance();
+        if (elements.checkoutWalletBalanceVal) {
+            elements.checkoutWalletBalanceVal.innerText = `₹${parseFloat(walletBalance).toFixed(2)}`;
+        }
+
+        const updateWalletSplitDisplay = () => {
+            const selectedPaymentEl = document.querySelector('input[name="payment-method"]:checked');
+            const selectedPayment = selectedPaymentEl ? selectedPaymentEl.value : 'upi';
+            if (selectedPayment === 'wallet' && walletBalance < grandTotal) {
+                elements.checkoutWalletSplitBox.style.display = 'block';
+                elements.checkoutSplitWalletApplied.innerText = `₹${parseFloat(walletBalance).toFixed(2)}`;
+                elements.checkoutSplitRemaining.innerText = `₹${parseFloat(grandTotal - walletBalance).toFixed(2)}`;
+            } else {
+                elements.checkoutWalletSplitBox.style.display = 'none';
+            }
+        };
+
+        document.querySelectorAll('input[name="payment-method"]').forEach(radio => {
+            radio.removeEventListener('change', updateWalletSplitDisplay);
+            radio.addEventListener('change', updateWalletSplitDisplay);
+        });
+        
+        updateWalletSplitDisplay();
     }
 
     function resetTippingButtons() {
@@ -1814,9 +2086,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const storeId = cart[0].storeId;
         const store = await db.getStoreById(storeId);
-        if (store && store.status === 'Closed') {
-            showToast("Checkout failed. This store is currently closed/offline.", "error");
-            return;
+        if (store) {
+            if (store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended')) {
+                showToast("Checkout failed. This store has been temporarily suspended.", "error");
+                return;
+            }
+            if (store.status === 'Closed') {
+                showToast("Checkout failed. This store is currently closed/offline.", "error");
+                return;
+            }
         }
         
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
@@ -1841,44 +2119,40 @@ document.addEventListener('DOMContentLoaded', () => {
         };
 
         const grandTotal = subtotal + deliveryFee + selectedTipAmount - discount;
+        const walletBalance = await db.getWalletBalance();
 
-        if (customer.payment === 'upi') {
-            elements.upiGrandTotal.innerText = `₹${grandTotal.toFixed(2)}`;
-            elements.upiLoaderContent.innerHTML = `
-                <div style="width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; margin-bottom: 12px;"></div>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Waiting for bank payment confirmation...</p>
-            `;
+        if (customer.payment === 'wallet') {
+            if (walletBalance < grandTotal) {
+                customer.payment = 'split';
+                customer.splitPaymentMethod = document.querySelector('input[name="wallet-split-method"]:checked').value;
+            }
+        }
+
+        if (customer.payment === 'upi' || (customer.payment === 'split' && customer.splitPaymentMethod === 'upi')) {
+            const upiAmount = customer.payment === 'split' ? (grandTotal - walletBalance) : grandTotal;
+            elements.upiGrandTotal.innerText = `₹${upiAmount.toFixed(2)}`;
+            
+            // Set payee details from store configuration
+            const upiVpa = store.upiVpa || 'luxegrocer@okaxis';
+            const upiName = store.upiName || store.name;
+            
+            elements.upiPayeeVpa.innerText = upiVpa;
+            elements.upiPayeeName.innerText = upiName;
+            
+            // Construct UPI Link and dynamic QR code URL
+            const upiUrl = `upi://pay?pa=${upiVpa}&pn=${encodeURIComponent(upiName)}&am=${upiAmount.toFixed(2)}&cu=INR`;
+            const qrCodeUrl = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&margin=10&data=${encodeURIComponent(upiUrl)}`;
+            
+            elements.upiQrImage.src = qrCodeUrl;
+            elements.upiTransactionId.value = '';
+            
+            // Store checkout data globally so transaction form can access it
+            checkoutCustomerData = customer;
+            checkoutDiscount = discount;
+            
+            // Display UPI Scan Modal
             elements.modalUpiPayment.style.display = 'flex';
             elements.modalUpiPayment.classList.add('active');
-
-            setTimeout(async () => {
-                elements.upiLoaderContent.innerHTML = `
-                    <div style="font-size: 2rem; color: var(--primary); margin-bottom: 12px;"><i class="fa-solid fa-circle-check"></i></div>
-                    <p style="font-size: 0.85rem; color: var(--text-main); font-weight: 600;">Payment Verified! Confirming order...</p>
-                `;
-                
-                const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '');
-                setTimeout(async () => {
-                    elements.modalUpiPayment.style.display = 'none';
-                    elements.modalUpiPayment.classList.remove('active');
-                    
-                    if (order) {
-                        cart = [];
-                        appliedVoucher = null;
-                        saveCartToStorage();
-                        updateCartBadge();
-                        showToast("Payment confirmed! Sourcing store rider.", "success");
-                        
-                        // Play Voice Alert
-                        playSoundbox(`Payment of ${Math.round(grandTotal)} rupees received on Luxe Grocer`);
-                        
-                        await startOrderTracking(order);
-                        await switchView('order-tracker');
-                    } else {
-                        showToast("Failed to place order. Try again.", "error");
-                    }
-                }, 1200);
-            }, 2500);
         } else {
             const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '');
             if (order) {
@@ -1886,9 +2160,18 @@ document.addEventListener('DOMContentLoaded', () => {
                 appliedVoucher = null;
                 saveCartToStorage();
                 updateCartBadge();
-                showToast("COD Order placed successfully.", "success");
                 
-                playSoundbox(`New cash on delivery order received on Luxe Grocer. Value ${Math.round(grandTotal)} rupees`);
+                let successMsg = "COD Order placed successfully.";
+                if (customer.payment === 'wallet') {
+                    successMsg = "Order paid successfully via Wallet!";
+                    playSoundbox(`New order received on Luxe Grocer. Paid via wallet. Value ${Math.round(grandTotal)} rupees`);
+                } else if (customer.payment === 'split') {
+                    successMsg = `Order placed! ₹${walletBalance.toFixed(2)} paid via Wallet, rest ₹${(grandTotal - walletBalance).toFixed(2)} COD.`;
+                    playSoundbox(`New order received on Luxe Grocer. Paid with wallet split. Value ${Math.round(grandTotal)} rupees`);
+                } else {
+                    playSoundbox(`New cash on delivery order received on Luxe Grocer. Value ${Math.round(grandTotal)} rupees`);
+                }
+                showToast(successMsg, "success");
                 
                 await startOrderTracking(order);
                 await switchView('order-tracker');
@@ -1923,6 +2206,37 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Live Order Tracker ---
     async function startOrderTracking(order) {
+        let orderToTrack = order;
+        
+        const multiStoreSelector = document.getElementById('tracker-multi-store-selector');
+        const subOrderSelect = document.getElementById('select-tracker-sub-order');
+        
+        if (order.isMaster && order.subOrders && order.subOrders.length > 0) {
+            if (multiStoreSelector && subOrderSelect) {
+                multiStoreSelector.style.display = 'flex';
+                subOrderSelect.innerHTML = '';
+                order.subOrders.forEach((sub, i) => {
+                    const opt = document.createElement('option');
+                    opt.value = i;
+                    opt.innerText = `${sub.storeName} (${sub.status})`;
+                    subOrderSelect.appendChild(opt);
+                });
+                
+                subOrderSelect.onchange = async () => {
+                    const idx = parseInt(subOrderSelect.value);
+                    const selectedSub = order.subOrders[idx];
+                    await refreshTrackerSubOrder(selectedSub);
+                };
+            }
+            orderToTrack = order.subOrders[0];
+        } else {
+            if (multiStoreSelector) multiStoreSelector.style.display = 'none';
+        }
+
+        await refreshTrackerSubOrder(orderToTrack);
+    }
+
+    async function refreshTrackerSubOrder(order) {
         trackingOrder = order;
         driverProgress = 0;
         scratchCardClaimed = false;
@@ -2017,6 +2331,65 @@ document.addEventListener('DOMContentLoaded', () => {
         } else if (freshOrder.deliveryOtp) {
             elements.trackerOtpCode.innerText = freshOrder.deliveryOtp;
             elements.trackerOtpBox.style.display = 'flex';
+        }
+
+        // Toggle Rider Card visibility based on assignment and status
+        if (freshOrder.deliveryStaff && ['Out for Delivery', 'Delivered'].includes(freshOrder.status)) {
+            elements.trackerRiderName.innerText = freshOrder.deliveryStaff.name;
+            elements.btnCallRider.href = `tel:${freshOrder.deliveryStaff.phone}`;
+            elements.trackerRiderBox.style.display = 'flex';
+        } else {
+            elements.trackerRiderBox.style.display = 'none';
+        }
+
+        // --- Out-of-Stock Substitution Check ---
+        const prop = freshOrder.substitutionProposal;
+        if (prop && prop.status === 'Pending') {
+            const originalItem = freshOrder.items.find(i => i.id === prop.originalItemId) || { name: 'Item', quantity: 1 };
+            elements.trackerSubstitutionText.innerHTML = `
+                Store owner proposed swapping out-of-stock <strong>${originalItem.name}</strong> 
+                with <strong>${prop.suggestedProduct.name}</strong> (${prop.suggestedProduct.emoji || '📦'}) for the same quantity. 
+                <br><span style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; display:block;">
+                Suggested product price: <strong>₹${prop.suggestedProduct.price.toFixed(2)}</strong> (vs original ₹${originalItem.price.toFixed(2)})
+                </span>
+            `;
+            elements.trackerSubstitutionBox.style.display = 'flex';
+        } else {
+            elements.trackerSubstitutionBox.style.display = 'none';
+        }
+
+        // --- Real-time Order Chat Updates ---
+        const chatMessages = freshOrder.chatMessages || [];
+        elements.customerChatBadge.innerText = chatMessages.length;
+        if (chatMessages.length > 0) {
+            elements.customerChatBadge.style.display = 'inline-block';
+        } else {
+            elements.customerChatBadge.style.display = 'none';
+        }
+
+        const messagesHtml = chatMessages.map(msg => {
+            const isMe = msg.sender === 'customer';
+            const align = isMe ? 'text-align: right;' : 'text-align: left;';
+            const bg = isMe ? 'background: rgba(20, 184, 166, 0.2); border-radius: 8px 8px 0 8px; margin-left: 20px;' : 'background: rgba(255,255,255,0.05); border-radius: 8px 8px 8px 0; margin-right: 20px;';
+            const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+            return `
+                <div style="${align} margin-bottom: 6px;">
+                    <div style="display: inline-block; padding: 6px 10px; font-size: 0.8rem; border: 1px solid var(--border-color); ${bg}">
+                        <div style="font-size: 0.65rem; color: var(--text-muted); font-weight: bold; margin-bottom: 2px;">${msg.senderName}</div>
+                        <div style="color: var(--text-main); word-break: break-word;">${msg.text}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted); margin-top: 2px; text-align: right;">${time}</div>
+                    </div>
+                </div>
+            `;
+        }).join('');
+
+        elements.customerChatMessages.innerHTML = messagesHtml || '<div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; padding: 10px 0;">No messages yet. Ask the store owner for status updates.</div>';
+
+        // Auto-scroll chat to bottom
+        if (customerChatOpen && elements.customerChatMessages) {
+            setTimeout(() => {
+                elements.customerChatMessages.scrollTop = elements.customerChatMessages.scrollHeight;
+            }, 50);
         }
 
         possibleStatuses.forEach((status, idx) => {
@@ -2318,10 +2691,71 @@ document.addEventListener('DOMContentLoaded', () => {
                     await loadStoreProfile(data);
                 }
             }
+            if (event === 'sys_notification') {
+                showSimulatedNotification(data.message);
+            }
         } catch (err) {
             console.error("Error parsing SSE message:", err);
         }
     };
+
+    function showSimulatedNotification(message) {
+        let container = document.getElementById('mock-notification-container');
+        if (!container) {
+            container = document.createElement('div');
+            container.id = 'mock-notification-container';
+            container.style.position = 'fixed';
+            container.style.bottom = '20px';
+            container.style.right = '20px';
+            container.style.zIndex = '99999';
+            container.style.display = 'flex';
+            container.style.flexDirection = 'column';
+            container.style.gap = '10px';
+            container.style.maxWidth = '360px';
+            container.style.width = '100%';
+            document.body.appendChild(container);
+        }
+        
+        const card = document.createElement('div');
+        card.style.background = 'rgba(15, 23, 42, 0.95)';
+        card.style.backdropFilter = 'blur(10px)';
+        card.style.border = '1px solid var(--primary)';
+        card.style.borderRadius = '12px';
+        card.style.padding = '16px';
+        card.style.color = 'white';
+        card.style.boxShadow = '0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.5)';
+        card.style.opacity = '0';
+        card.style.transform = 'translateY(20px)';
+        card.style.transition = 'all 0.4s ease-out';
+        
+        const isEmail = message.startsWith('Email');
+        const icon = isEmail ? '📧' : '📱';
+        const title = isEmail ? 'Simulated Email Sent' : 'Simulated SMS Sent';
+        
+        card.innerHTML = `
+            <div style="display: flex; gap: 12px; align-items: flex-start;">
+                <div style="font-size: 1.5rem; background: rgba(20, 184, 166, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(20, 184, 166, 0.2);">${icon}</div>
+                <div style="flex-grow: 1;">
+                    <strong style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 4px;">${title}</strong>
+                    <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0; line-height: 1.4;">${message}</p>
+                </div>
+                <button style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 0; font-size: 1.2rem; line-height: 1;" onclick="this.parentElement.parentElement.remove()">&times;</button>
+            </div>
+        `;
+        
+        container.appendChild(card);
+        
+        setTimeout(() => {
+            card.style.opacity = '1';
+            card.style.transform = 'translateY(0)';
+        }, 50);
+        
+        setTimeout(() => {
+            card.style.opacity = '0';
+            card.style.transform = 'translateY(-20px)';
+            setTimeout(() => card.remove(), 400);
+        }, 6000);
+    }
 
     // --- Click Event Listeners ---
     
@@ -2345,6 +2779,29 @@ document.addEventListener('DOMContentLoaded', () => {
             } catch (err) {
                 console.error("Error tracking active order from nav:", err);
             }
+        });
+    }
+
+    function applyTheme(theme) {
+        if (theme === 'light') {
+            document.body.classList.add('light-theme');
+            if (elements.btnThemeToggle) {
+                elements.btnThemeToggle.innerHTML = '<i class="fa-solid fa-sun"></i>';
+            }
+        } else {
+            document.body.classList.remove('light-theme');
+            if (elements.btnThemeToggle) {
+                elements.btnThemeToggle.innerHTML = '<i class="fa-solid fa-moon"></i>';
+            }
+        }
+    }
+
+    if (elements.btnThemeToggle) {
+        elements.btnThemeToggle.addEventListener('click', () => {
+            const currentTheme = localStorage.getItem('luxegrocer_theme') || 'dark';
+            const newTheme = currentTheme === 'light' ? 'dark' : 'light';
+            localStorage.setItem('luxegrocer_theme', newTheme);
+            applyTheme(newTheme);
         });
     }
 
@@ -2546,6 +3003,15 @@ document.addEventListener('DOMContentLoaded', () => {
         document.getElementById('auth-modal-subtitle').innerText = "Sign in to access premium local catalog shelves";
     });
 
+    const btnAutofillCustomerDemo = document.getElementById('btn-autofill-customer-demo');
+    if (btnAutofillCustomerDemo) {
+        btnAutofillCustomerDemo.addEventListener('click', (e) => {
+            e.preventDefault();
+            elements.loginEmail.value = 'rahul@luxe.com';
+            elements.loginPassword.value = 'admin123';
+        });
+    }
+
     elements.formCustomerLogin.addEventListener('submit', handleLoginSubmit);
     elements.formCustomerRegister.addEventListener('submit', handleRegisterSubmit);
     elements.formChangePassword.addEventListener('submit', handleChangePasswordSubmit);
@@ -2631,6 +3097,54 @@ document.addEventListener('DOMContentLoaded', () => {
 
     elements.checkoutPaymentForm.addEventListener('submit', processCheckoutSubmit);
 
+    // Form confirmation submit listener for UPI Transaction ID
+    elements.formUpiPaymentConfirmation.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (cart.length === 0 || !checkoutCustomerData) return;
+        
+        const utr = elements.upiTransactionId.value.trim();
+        if (utr.length < 6) {
+            showToast("Please enter a valid Transaction Ref No. (min 6 characters)", "error");
+            return;
+        }
+        
+        checkoutCustomerData.transactionId = utr;
+        
+        const storeId = cart[0].storeId;
+        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        const deliveryFee = db.getDeliveryFee(cart[0].storeDistance, subtotal);
+        const grandTotal = subtotal + deliveryFee + selectedTipAmount - checkoutDiscount;
+        
+        elements.btnSubmitUpiTransaction.disabled = true;
+        elements.btnSubmitUpiTransaction.innerText = "Confirming Settlement...";
+        
+        const order = await db.createOrder(storeId, cart, checkoutCustomerData, checkoutDiscount, appliedVoucher ? appliedVoucher.code : '');
+        
+        elements.btnSubmitUpiTransaction.disabled = false;
+        elements.btnSubmitUpiTransaction.innerText = "Confirm & Submit Order";
+        
+        if (order) {
+            elements.modalUpiPayment.style.display = 'none';
+            elements.modalUpiPayment.classList.remove('active');
+            cart = [];
+            appliedVoucher = null;
+            checkoutCustomerData = null;
+            saveCartToStorage();
+            updateCartBadge();
+            let successMsg = "UPI Payment order confirmed! Waiting for merchant verification.";
+            if (order.customer.payment === 'split') {
+                successMsg = `Split Order placed! Wallet used: ₹${order.customer.walletAmountPaid.toFixed(2)}, UPI paid: ₹${order.customer.splitAmountPaid.toFixed(2)}.`;
+            }
+            showToast(successMsg, "success");
+            const upiAmountPaid = order.customer.payment === 'split' ? order.customer.splitAmountPaid : grandTotal;
+            playSoundbox(`Payment of ${Math.round(upiAmountPaid)} rupees received on Luxe Grocer`);
+            await startOrderTracking(order);
+            await switchView('order-tracker');
+        } else {
+            showToast("Failed to place order. Try again.", "error");
+        }
+    });
+
     // Cancel order button click
     elements.btnCancelOrder.addEventListener('click', async () => {
         if (trackingOrder) {
@@ -2651,6 +3165,101 @@ document.addEventListener('DOMContentLoaded', () => {
         trackingOrder = null;
         await switchView('landing');
         await updateActiveOrderButtonVisibility();
+    });
+
+    // Customer Chat Toggle Listener
+    elements.btnToggleCustomerChat.addEventListener('click', () => {
+        if (elements.customerChatDrawer.style.display === 'none') {
+            elements.customerChatDrawer.style.display = 'flex';
+            elements.customerChatChevron.style.transform = 'rotate(180deg)';
+            customerChatOpen = true;
+            setTimeout(() => {
+                elements.customerChatMessages.scrollTop = elements.customerChatMessages.scrollHeight;
+                elements.customerChatInput.focus();
+            }, 50);
+        } else {
+            elements.customerChatDrawer.style.display = 'none';
+            elements.customerChatChevron.style.transform = 'rotate(0deg)';
+            customerChatOpen = false;
+        }
+    });
+
+    // Customer Chat Submit Form Listener
+    elements.customerChatForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        if (!trackingOrder) return;
+        const text = elements.customerChatInput.value.trim();
+        if (!text) return;
+
+        try {
+            const res = await fetch(`${db.baseUrl}/orders/${trackingOrder.id}/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('luxegrocer_customer_auth_token')}`
+                },
+                body: JSON.stringify({ text })
+            });
+            if (res.ok) {
+                elements.customerChatInput.value = '';
+                // The SSE stream will trigger updateTrackerTimeline which re-renders the chat box.
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Failed to send message', 'error');
+            }
+        } catch (err) {
+            console.error('Customer chat error:', err);
+            showToast('Failed to send message', 'error');
+        }
+    });
+
+    // Substitution proposal responses
+    elements.btnTrackerAcceptSub.addEventListener('click', async () => {
+        if (!trackingOrder) return;
+        try {
+            const res = await fetch(`${db.baseUrl}/orders/${trackingOrder.id}/substitution-response`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('luxegrocer_customer_auth_token')}`
+                },
+                body: JSON.stringify({ action: 'Accept' })
+            });
+            if (res.ok) {
+                showToast('Substitution proposal accepted successfully!', 'success');
+                // SSE handles the timeline sync and updating totals
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Failed to accept substitution', 'error');
+            }
+        } catch (err) {
+            console.error('Accept swap error:', err);
+            showToast('Failed to accept substitution', 'error');
+        }
+    });
+
+    elements.btnTrackerDeclineSub.addEventListener('click', async () => {
+        if (!trackingOrder) return;
+        try {
+            const res = await fetch(`${db.baseUrl}/orders/${trackingOrder.id}/substitution-response`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('luxegrocer_customer_auth_token')}`
+                },
+                body: JSON.stringify({ action: 'Decline' })
+            });
+            if (res.ok) {
+                showToast('Substitution proposal declined and item removed from order.', 'info');
+                // SSE handles timeline sync
+            } else {
+                const err = await res.json();
+                showToast(err.error || 'Failed to decline substitution', 'error');
+            }
+        } catch (err) {
+            console.error('Decline swap error:', err);
+            showToast('Failed to decline substitution', 'error');
+        }
     });
 
     function openReviewModal(order) {
@@ -2784,6 +3393,36 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.tabBtnAddresses.addEventListener('click', () => showAccountTab('addresses'));
     elements.tabBtnHistory.addEventListener('click', () => showAccountTab('history'));
     elements.tabBtnVouchers.addEventListener('click', () => showAccountTab('vouchers'));
+    if (elements.tabBtnWallet) {
+        elements.tabBtnWallet.addEventListener('click', () => showAccountTab('wallet'));
+    }
+    if (elements.formAddFunds) {
+        elements.formAddFunds.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const amt = parseFloat(elements.walletAddAmount.value);
+            if (isNaN(amt) || amt <= 0) {
+                showToast("Please enter a valid amount.", "error");
+                return;
+            }
+            const submitBtn = document.getElementById('btn-add-funds-submit');
+            if (submitBtn) {
+                submitBtn.disabled = true;
+                submitBtn.innerText = 'Adding...';
+            }
+            const newBal = await db.addWalletFunds(amt);
+            if (submitBtn) {
+                submitBtn.disabled = false;
+                submitBtn.innerText = 'Add Funds';
+            }
+            if (newBal !== null) {
+                elements.accountWalletBalance.innerText = `₹${parseFloat(newBal).toFixed(2)}`;
+                elements.walletAddAmount.value = '500';
+                showToast(`Successfully added ₹${amt.toFixed(2)} to your wallet!`, "success");
+            } else {
+                showToast("Failed to add funds. Try again.", "error");
+            }
+        });
+    }
 
     // Profile update submit
     elements.formAccountProfile.addEventListener('submit', async (e) => {
@@ -2876,7 +3515,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-        const res = await db.validateVoucher(code, subtotal);
+        const storeSubtotals = {};
+        cart.forEach(item => {
+            storeSubtotals[item.storeId] = (storeSubtotals[item.storeId] || 0) + (item.price * item.quantity);
+        });
+        const res = await db.validateVoucher(code, subtotal, storeSubtotals);
         if (res.success) {
             appliedVoucher = res.voucher;
             elements.couponAppliedMsg.style.display = 'flex';
@@ -2923,11 +3566,103 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
+    let bannerInterval = null;
+    async function initPromoBanners() {
+        const carousel = document.getElementById('promo-banner-carousel');
+        const slidesContainer = document.getElementById('promo-banner-slides');
+        const dotsContainer = document.getElementById('promo-banner-dots');
+        if (!carousel || !slidesContainer || !dotsContainer) return;
+        
+        if (bannerInterval) clearInterval(bannerInterval);
+        
+        const banners = await db.getBanners();
+        if (banners.length === 0) {
+            carousel.style.display = 'none';
+            return;
+        }
+        
+        carousel.style.display = 'block';
+        slidesContainer.innerHTML = '';
+        dotsContainer.innerHTML = '';
+        
+        banners.forEach((b, idx) => {
+            const slide = document.createElement('div');
+            slide.className = 'promo-slide';
+            slide.style.position = 'absolute';
+            slide.style.top = '0';
+            slide.style.left = '0';
+            slide.style.width = '100%';
+            slide.style.height = '100%';
+            slide.style.display = idx === 0 ? 'flex' : 'none';
+            slide.style.alignItems = 'center';
+            slide.style.padding = '24px 32px';
+            slide.style.boxSizing = 'border-box';
+            slide.style.backgroundSize = 'cover';
+            slide.style.backgroundPosition = 'center';
+            slide.style.transition = 'opacity 0.6s ease-in-out';
+            if (b.imageUrl) {
+                slide.style.backgroundImage = `linear-gradient(90deg, rgba(9, 13, 22, 0.95) 30%, rgba(9, 13, 22, 0.4) 100%), url('${b.imageUrl}')`;
+            } else {
+                slide.style.backgroundImage = `linear-gradient(90deg, var(--bg-card) 0%, rgba(20, 184, 166, 0.15) 100%)`;
+            }
+            
+            slide.innerHTML = `
+                <div style="max-width: 70%; z-index: 2;">
+                    <span style="background: var(--primary); color: white; padding: 4px 8px; border-radius: 4px; font-size: 0.65rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px;">Offer</span>
+                    <h2 style="margin: 8px 0 0 0; font-size: 1.1rem; line-height: 1.4; font-weight: 700; color: white;">${b.text}</h2>
+                </div>
+            `;
+            slidesContainer.appendChild(slide);
+            
+            const dot = document.createElement('button');
+            dot.style.width = '8px';
+            dot.style.height = '8px';
+            dot.style.borderRadius = '50%';
+            dot.style.border = 'none';
+            dot.style.background = idx === 0 ? 'var(--primary)' : 'rgba(255, 255, 255, 0.3)';
+            dot.style.cursor = 'pointer';
+            dot.style.padding = '0';
+            dot.addEventListener('click', () => showSlide(idx));
+            dotsContainer.appendChild(dot);
+        });
+        
+        let currentSlideIdx = 0;
+        function showSlide(index) {
+            const slides = slidesContainer.querySelectorAll('.promo-slide');
+            const dots = dotsContainer.querySelectorAll('button');
+            if (slides.length === 0) return;
+            
+            slides.forEach((slide, idx) => {
+                if (idx === index) {
+                    slide.style.display = 'flex';
+                    slide.style.opacity = '1';
+                } else {
+                    slide.style.display = 'none';
+                    slide.style.opacity = '0';
+                }
+            });
+            
+            dots.forEach((dot, idx) => {
+                dot.style.background = idx === index ? 'var(--primary)' : 'rgba(255, 255, 255, 0.3)';
+            });
+            currentSlideIdx = index;
+        }
+        
+        if (banners.length > 1) {
+            bannerInterval = setInterval(() => {
+                let nextIdx = (currentSlideIdx + 1) % banners.length;
+                showSlide(nextIdx);
+            }, 5000);
+        }
+    }
+
     // --- Bootstrapping ---
     async function bootstrap() {
+        applyTheme(localStorage.getItem('luxegrocer_theme') || 'dark');
         db.initDatabase();
         loadCartFromStorage();
         await initAuth();
+        await initPromoBanners();
         await updateLocationUI();
         if (!trackingOrder) {
             await switchView('landing');

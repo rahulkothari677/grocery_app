@@ -25,6 +25,50 @@
     
     --shadow-premium: 0 8px 32px 0 rgba(0, 0, 0, 0.37);
     --glass-blur: blur(16px);
+
+    /* V2 theme custom backgrounds */
+    --nav-bg: rgba(9, 13, 22, 0.7);
+    --footer-bg: rgba(9, 13, 22, 0.9);
+    --overlay-bg: rgba(9, 13, 22, 0.7);
+    --overlay-drawer: rgba(9, 13, 22, 0.6);
+    --drawer-bg: #0d121f;
+    --input-bg: rgba(255, 255, 255, 0.04);
+    --input-focus-bg: rgba(255, 255, 255, 0.08);
+    --store-overlay-bg: linear-gradient(to bottom, transparent 30%, rgba(9, 13, 22, 0.9) 100%);
+    --store-header-overlay-bg: linear-gradient(to top, rgba(9, 13, 22, 1) 0%, rgba(9, 13, 22, 0.6) 50%, rgba(9, 13, 22, 0.2) 100%);
+}
+
+body.light-theme {
+    --bg-dark: #f8fafc;
+    --bg-card: rgba(255, 255, 255, 0.8);
+    --border-color: rgba(15, 23, 42, 0.08);
+    --border-focus: rgba(16, 185, 129, 0.6);
+    
+    --primary: #059669;
+    --primary-hover: #047857;
+    --primary-glow: rgba(16, 185, 129, 0.12);
+    
+    --secondary: #0d9488;
+    --accent: #d97706;
+    --danger: #dc2626;
+    
+    --text-main: #0f172a;
+    --text-muted: #475569;
+    --text-dark: #f8fafc;
+    
+    --glass-bg: rgba(255, 255, 255, 0.8);
+    --shadow-premium: 0 8px 32px 0 rgba(15, 23, 42, 0.08);
+
+    /* V2 theme light overrides */
+    --nav-bg: rgba(255, 255, 255, 0.7);
+    --footer-bg: rgba(255, 255, 255, 0.95);
+    --overlay-bg: rgba(15, 23, 42, 0.35);
+    --overlay-drawer: rgba(15, 23, 42, 0.35);
+    --drawer-bg: #ffffff;
+    --input-bg: rgba(255, 255, 255, 0.9);
+    --input-focus-bg: #ffffff;
+    --store-overlay-bg: linear-gradient(to bottom, transparent 30%, rgba(15, 23, 42, 0.35) 100%);
+    --store-header-overlay-bg: linear-gradient(to top, rgba(255, 255, 255, 0.95) 0%, rgba(255, 255, 255, 0.5) 50%, rgba(255, 255, 255, 0.15) 100%);
 }
 
 /* Base Styles */
@@ -102,7 +146,7 @@ button, input, textarea, select {
 }
 
 .glass-input {
-    background: rgba(255, 255, 255, 0.04);
+    background: var(--input-bg);
     border: 1px solid var(--border-color);
     border-radius: 12px;
     color: var(--text-main);
@@ -113,8 +157,12 @@ button, input, textarea, select {
 }
 .glass-input:focus {
     border-color: var(--primary);
-    background: rgba(255, 255, 255, 0.08);
+    background: var(--input-focus-bg);
     box-shadow: 0 0 0 3px var(--primary-glow);
+}
+.glass-input::placeholder {
+    color: var(--text-muted);
+    opacity: 0.6;
 }
 
 /* Gradient Text and Buttons */
@@ -193,7 +241,7 @@ button, input, textarea, select {
     position: sticky;
     top: 0;
     z-index: 100;
-    background: rgba(9, 13, 22, 0.7);
+    background: var(--nav-bg);
     backdrop-filter: var(--glass-blur);
     -webkit-backdrop-filter: var(--glass-blur);
     border-bottom: 1px solid var(--border-color);
@@ -447,7 +495,7 @@ button, input, textarea, select {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to bottom, transparent 30%, rgba(9, 13, 22, 0.9) 100%);
+    background: var(--store-overlay-bg);
 }
 
 .store-badge {
@@ -539,7 +587,7 @@ button, input, textarea, select {
     left: 0;
     width: 100%;
     height: 100%;
-    background: linear-gradient(to top, rgba(9, 13, 22, 1) 0%, rgba(9, 13, 22, 0.6) 50%, rgba(9, 13, 22, 0.2) 100%);
+    background: var(--store-header-overlay-bg);
 }
 
 .store-header-content {
@@ -812,7 +860,7 @@ button, input, textarea, select {
     right: 0;
     width: 100vw;
     height: 100vh;
-    background: rgba(9, 13, 22, 0.6);
+    background: var(--overlay-drawer);
     backdrop-filter: blur(4px);
     z-index: 1000;
     opacity: 0;
@@ -831,7 +879,7 @@ button, input, textarea, select {
     width: 480px;
     height: 100%;
     z-index: 1001;
-    background: #0d121f;
+    background: var(--drawer-bg);
     border-left: 1px solid var(--border-color);
     box-shadow: -10px 0 30px rgba(0,0,0,0.5);
     display: flex;
@@ -1035,6 +1083,7 @@ button, input, textarea, select {
 .timeline-step {
     position: relative;
     margin-bottom: 30px;
+    animation: timeline-slide-in 0.5s ease-out forwards;
 }
 .timeline-step:last-child {
     margin-bottom: 0;
@@ -1060,12 +1109,51 @@ button, input, textarea, select {
     background: var(--secondary);
     border-color: var(--primary-glow);
     box-shadow: 0 0 10px var(--secondary);
-    animation: pulse 1.5s infinite;
+    animation: status-pulse-glow 2s infinite ease-in-out;
 }
 .timeline-step.active.cancelled .timeline-dot {
     background: var(--danger);
     border-color: var(--danger);
     box-shadow: 0 0 10px var(--danger);
+}
+
+@keyframes status-pulse-glow {
+    0% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0.6);
+        transform: scale(1);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(245, 158, 11, 0);
+        transform: scale(1.15);
+    }
+    100% {
+        box-shadow: 0 0 0 0 rgba(245, 158, 11, 0);
+        transform: scale(1);
+    }
+}
+@keyframes timeline-slide-in {
+    from {
+        opacity: 0;
+        transform: translateX(-15px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+@keyframes card-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+#tracker-rider-box {
+    animation: card-fade-up 0.5s ease-out forwards;
 }
 
 .timeline-content h4 {
@@ -1303,7 +1391,7 @@ button, input, textarea, select {
     left: 0;
     width: 100%;
     height: 100%;
-    background: rgba(9, 13, 22, 0.7);
+    background: var(--overlay-bg);
     backdrop-filter: blur(8px);
     z-index: 2000;
     display: flex;
@@ -1370,7 +1458,7 @@ button, input, textarea, select {
 /* Footer Section */
 footer {
     border-top: 1px solid var(--border-color);
-    background: rgba(9, 13, 22, 0.9);
+    background: var(--footer-bg);
     padding: 40px 0;
     margin-top: 80px;
     text-align: center;

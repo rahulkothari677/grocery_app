@@ -273,22 +273,26 @@ class LuxeStore {
         if (!query || query.trim() === '') return [];
         const q = query.toLowerCase().trim();
         
-        const stores = await this.getStores();
-        let matches = [];
-        
-        stores.forEach(store => {
-            store.products.forEach(product => {
-                if (product.name.toLowerCase().includes(q) || 
-                    product.category.toLowerCase().includes(q) ||
-                    (product.desc && product.desc.toLowerCase().includes(q))) {
+        try {
+            const res = await fetch(`${this.baseUrl}/search?q=${encodeURIComponent(q)}`);
+            if (!res.ok) throw new Error("Search API failed");
+            const data = await res.json();
+            
+            const stores = await this.getStores();
+            let matches = [];
+            
+            data.products.forEach(p => {
+                const store = stores.find(s => s.id === p.storeId);
+                if (store) {
+                    const originalProduct = store.products.find(sp => sp.id === p.id);
                     matches.push({
-                        product,
+                        product: originalProduct || p,
                         store: {
                             id: store.id,
                             name: store.name,
                             image: store.image,
                             rating: store.rating,
-                            distance: store.distance,
+                            distance: store.distance || 1.0,
                             address: store.address,
                             deliveryRadius: store.deliveryRadius,
                             minOrderValue: store.minOrderValue
@@ -296,9 +300,35 @@ class LuxeStore {
                     });
                 }
             });
-        });
-        
-        return matches.sort((a, b) => a.store.distance - b.store.distance || b.product.rating - a.product.rating);
+            
+            return matches.sort((a, b) => a.store.distance - b.store.distance || b.product.rating - a.product.rating);
+        } catch (err) {
+            console.error("Fuzzy search failed, falling back to local exact search:", err);
+            const stores = await this.getStores();
+            let matches = [];
+            stores.forEach(store => {
+                store.products.forEach(product => {
+                    if (product.name.toLowerCase().includes(q) || 
+                        product.category.toLowerCase().includes(q) ||
+                        (product.desc && product.desc.toLowerCase().includes(q))) {
+                        matches.push({
+                            product,
+                            store: {
+                                id: store.id,
+                                name: store.name,
+                                image: store.image,
+                                rating: store.rating,
+                                distance: store.distance,
+                                address: store.address,
+                                deliveryRadius: store.deliveryRadius,
+                                minOrderValue: store.minOrderValue
+                            }
+                        });
+                    }
+                });
+            });
+            return matches.sort((a, b) => a.store.distance - b.store.distance || b.product.rating - a.product.rating);
+        }
     }
 
     // --- Orders API Helpers ---
@@ -434,12 +464,12 @@ class LuxeStore {
         }
     }
 
-    async validateVoucher(code, subtotal) {
+    async validateVoucher(code, subtotal, storeSubtotals) {
         try {
             const res = await fetch(`${this.baseUrl}/vouchers/validate`, {
                 method: 'POST',
                 headers: this.getHeaders(),
-                body: JSON.stringify({ code, subtotal })
+                body: JSON.stringify({ code, subtotal, storeSubtotals })
             });
             const data = await res.json();
             if (!res.ok) {
@@ -452,6 +482,36 @@ class LuxeStore {
         }
     }
 
+    async getWalletBalance() {
+        try {
+            const res = await fetch(`${this.baseUrl}/wallet/balance`, {
+                headers: this.getHeaders()
+            });
+            if (!res.ok) return 0.00;
+            const data = await res.json();
+            return data.walletBalance || 0.00;
+        } catch (err) {
+            console.error("API error fetching wallet balance:", err);
+            return 0.00;
+        }
+    }
+
+    async addWalletFunds(amount) {
+        try {
+            const res = await fetch(`${this.baseUrl}/wallet/add-funds`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ amount })
+            });
+            if (!res.ok) return null;
+            const data = await res.json();
+            return data.walletBalance;
+        } catch (err) {
+            console.error("API error adding wallet funds:", err);
+            return null;
+        }
+    }
+
     getDefaultStatusDesc(status) {
         switch(status) {
             case 'Pending': return 'Waiting for store acceptance.';
@@ -459,6 +519,17 @@ class LuxeStore {
             case 'Out for Delivery': return 'Delivery agent has picked up your package and is on the way.';
             case 'Delivered': return 'Package delivered successfully. Thank you!';
             default: return 'Order status updated.';
+        }
+    }
+
+    async getBanners() {
+        try {
+            const res = await fetch(`${this.baseUrl}/banners`);
+            if (res.ok) return await res.json();
+            return [];
+        } catch (err) {
+            console.error("API error getting banners:", err);
+            return [];
         }
     }
 }

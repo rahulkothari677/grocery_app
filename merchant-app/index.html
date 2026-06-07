@@ -21,6 +21,10 @@
 
             <!-- Header Action Controls -->
             <div class="nav-actions" style="display: flex; gap: 10px; align-items: center;">
+                <!-- Theme Toggle Button -->
+                <button class="btn-icon" id="btn-theme-toggle" title="Toggle Dark/Light Mode" style="border: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-main); width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; cursor: pointer;">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
                 <button class="btn-premium" id="btn-merchant-profile" style="background: transparent; border: 1.5px solid var(--secondary); color: var(--secondary); font-size: 0.85rem; padding: 8px 16px; border-radius: 8px; display: none; align-items: center; gap: 8px;">
                     <i class="fa-solid fa-user-gear"></i> Account Settings
                 </button>
@@ -42,17 +46,18 @@
                     <div style="font-size: 3.5rem; color: var(--secondary); margin-bottom: 12px;"><i class="fa-solid fa-user-lock"></i></div>
                     <h2 id="merchant-auth-title" style="font-size: 1.8rem; font-weight: 700;">Partner Portal</h2>
                     <p id="merchant-auth-subtitle" style="color: var(--text-muted); font-size: 0.85rem; margin-top: 6px;">Access your digital shelf manager & deliveries console</p>
+                    <p id="merchant-auth-seed-hint" style="font-size: 0.75rem; color: var(--secondary); margin-top: 6px; font-weight: 500;"><i class="fa-solid fa-circle-info"></i> Demo: Use <strong>organic@luxe.com</strong> & <strong>admin123</strong> <a href="#" id="btn-autofill-merchant-demo" style="margin-left: 8px; color: var(--accent); font-weight: 700; text-decoration: underline;">[Auto-Fill]</a></p>
                 </div>
 
                 <!-- Login Form -->
                 <form id="form-merchant-login" style="display: flex; flex-direction: column; gap: 16px;">
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Merchant Email</label>
-                        <input type="email" id="merchant-login-email" class="glass-input" required placeholder="manager@luxe.com" style="width: 100%;">
+                        <input type="email" id="merchant-login-email" class="glass-input" required placeholder="organic@luxe.com" value="organic@luxe.com" style="width: 100%;">
                     </div>
                     <div class="form-group" style="margin: 0;">
                         <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
-                        <input type="password" id="merchant-login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                        <input type="password" id="merchant-login-password" class="glass-input" required placeholder="admin123" value="admin123" style="width: 100%;">
                     </div>
                     <div style="text-align: right; margin-top: -8px;">
                         <a href="#" id="link-merchant-forgot-password" style="color: var(--text-muted); font-size: 0.75rem; text-decoration: none;">Forgot Password?</a>
@@ -122,6 +127,8 @@
                         <li class="owner-nav-item"><button id="btn-owner-nav-orders"><i class="fa-solid fa-receipt"></i> Orders Queue</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-inventory"><i class="fa-solid fa-boxes-stacked"></i> Inventory Manager</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-reviews"><i class="fa-solid fa-star"></i> Customer Reviews</button></li>
+                        <li class="owner-nav-item"><button id="btn-owner-nav-billing"><i class="fa-solid fa-credit-card"></i> Billing & Plans</button></li>
+                        <li class="owner-nav-item"><button id="btn-owner-nav-coupons"><i class="fa-solid fa-ticket"></i> Store Coupons</button></li>
                         <li class="owner-nav-item"><button id="btn-owner-nav-settings"><i class="fa-solid fa-sliders"></i> Store Settings</button></li>
                     </ul>
 
@@ -181,15 +188,30 @@
                         </div>
 
                         <!-- Graphical stats -->
-                        <div style="display: grid; grid-template-columns: 2fr 1.2fr; gap: 24px; margin-bottom: 40px;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 24px;">
                             <div class="glass-panel" style="padding: 24px;">
-                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;">Weekly Sales Revenue</h3>
-                                <div class="chart-container" style="display: flex; align-items: flex-end; justify-content: space-between; height: 180px; padding-top: 20px;" id="analytics-revenue-chart">
-                                    <!-- Rendered dynamically -->
+                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;"><i class="fa-solid fa-chart-line" style="color: var(--secondary); margin-right: 8px;"></i>Daily Revenue Dynamics</h3>
+                                <div class="chart-container" style="position: relative; height: 200px;" id="analytics-hourly-sales-chart">
+                                    <!-- Rendered dynamically as SVG -->
                                 </div>
                             </div>
                             <div class="glass-panel" style="padding: 24px;">
-                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;">Top Selling Products</h3>
+                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;"><i class="fa-solid fa-chart-column" style="color: var(--primary); margin-right: 8px;"></i>Weekly Orders Volume</h3>
+                                <div class="chart-container" style="position: relative; height: 200px;" id="analytics-weekly-orders-chart">
+                                    <!-- Rendered dynamically as SVG -->
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; margin-bottom: 40px;">
+                            <div class="glass-panel" style="padding: 24px;">
+                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;"><i class="fa-solid fa-chart-pie" style="color: var(--accent); margin-right: 8px;"></i>Top Categories</h3>
+                                <div class="chart-container" style="position: relative; height: 200px; display: flex; align-items: center; justify-content: center;" id="analytics-categories-chart">
+                                    <!-- Rendered dynamically as SVG Donut -->
+                                </div>
+                            </div>
+                            <div class="glass-panel" style="padding: 24px;">
+                                <h3 style="font-size: 1.1rem; margin-bottom: 20px;"><i class="fa-solid fa-fire" style="color: #ef4444; margin-right: 8px;"></i>Top Selling Products</h3>
                                 <div style="display: flex; flex-direction: column; gap: 16px;" id="analytics-products-list">
                                     <!-- Rendered dynamically -->
                                 </div>
@@ -290,8 +312,52 @@
                                         </div>
                                     </div>
                                 </div>
+                                <div class="form-group-row" style="display: flex; gap: 15px; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border-color); margin-bottom: 10px;">
+                                    <div class="form-group" style="flex: 1; margin: 0;">
+                                        <label for="settings-store-upi-vpa"><i class="fa-solid fa-qrcode" style="color: var(--secondary); margin-right: 5px;"></i> Merchant UPI VPA Address</label>
+                                        <input type="text" id="settings-store-upi-vpa" class="glass-input" placeholder="E.g., storename@okaxis" required>
+                                    </div>
+                                    <div class="form-group" style="flex: 1; margin: 0;">
+                                        <label for="settings-store-upi-name">UPI Payee / Business Name</label>
+                                        <input type="text" id="settings-store-upi-name" class="glass-input" placeholder="E.g., GreenValley Dairy Boutique" required>
+                                    </div>
+                                </div>
                                 <button type="submit" class="btn-premium" style="margin-top: 10px;">Save Profile Configuration</button>
                             </form>
+
+                            <!-- Delivery Staff Management Section -->
+                            <div style="margin-top: 30px; padding-top: 25px; border-top: 1px dashed var(--border-color);">
+                                <h3 style="font-size: 1.25rem; font-weight: 700; margin-bottom: 5px; color: var(--text-main);"><i class="fa-solid fa-person-biking" style="color: var(--secondary); margin-right: 8px;"></i> Delivery Staff Management</h3>
+                                <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 20px;">Manage internal delivery staff assigned to doorstep orders.</p>
+                                
+                                <form id="form-add-delivery-staff" class="checkout-form" style="display: flex; gap: 12px; margin-bottom: 20px; align-items: flex-end;">
+                                    <div class="form-group" style="flex: 2; margin: 0;">
+                                        <label style="font-size: 0.75rem;">Rider Full Name</label>
+                                        <input type="text" id="delivery-staff-name" class="glass-input" placeholder="E.g., Ramesh Kumar" required style="width: 100%;">
+                                    </div>
+                                    <div class="form-group" style="flex: 2; margin: 0;">
+                                        <label style="font-size: 0.75rem;">Contact Number</label>
+                                        <input type="tel" id="delivery-staff-phone" class="glass-input" placeholder="E.g., +91 99887 76655" required style="width: 100%;">
+                                    </div>
+                                    <button type="submit" class="btn-premium" style="flex: 1; padding: 11px; margin: 0; display: flex; align-items: center; justify-content: center; gap: 6px;"><i class="fa-solid fa-plus"></i> Add Rider</button>
+                                </form>
+
+                                <div class="glass-card" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); border-radius: 10px;">
+                                    <table class="inventory-table" style="width: 100%; margin: 0; border: none; font-size: 0.85rem;">
+                                        <thead>
+                                            <tr>
+                                                <th style="padding: 12px 16px;">Rider Name</th>
+                                                <th style="padding: 12px 16px;">Phone Number</th>
+                                                <th style="padding: 12px 16px;">Status</th>
+                                                <th style="padding: 12px 16px; text-align: right;">Actions</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="delivery-staff-list-container">
+                                            <!-- Dynamically rendered -->
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
                             
                             <form id="owner-change-password-form" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px; margin-top: 30px; padding-top: 25px; border-top: 1px dashed var(--border-color);">
                                 <h3 style="font-size: 1.1rem; margin-bottom: 5px; color: var(--text-main);"><i class="fa-solid fa-lock" style="color: var(--secondary);"></i> Update Password</h3>
@@ -332,6 +398,155 @@
                             <div id="owner-reviews-list" style="display: flex; flex-direction: column; gap: 16px;">
                                 <!-- Loaded dynamically -->
                             </div>
+                        </div>
+                    </div>
+
+                    <!-- View Pane 5: Billing & Plans Pane -->
+                    <div id="owner-pane-billing" class="owner-panel-pane" style="display: none;">
+                        <div class="glass-panel" style="padding: 30px;">
+                            <div class="section-header" style="margin-top: 0; margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                                <h2>Store Subscription & Billing</h2>
+                                <p>Manage your storefront listing plans and platform status details</p>
+                            </div>
+
+                            <!-- Subscription Status Banner Callout -->
+                            <div id="billing-status-callout" style="padding: 20px; border-radius: 12px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid var(--primary); background: rgba(255,255,255,0.02);">
+                                <div style="display: flex; align-items: center; gap: 16px;">
+                                    <span style="font-size: 2.2rem;" id="billing-status-icon">🟢</span>
+                                    <div>
+                                        <h4 style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);" id="billing-status-title">Store Shelf Active</h4>
+                                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;" id="billing-status-desc">Your store is open, listing items, and receiving local checkouts.</p>
+                                    </div>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: bold; letter-spacing: 0.5px;">Active Plan</div>
+                                    <h4 style="font-size: 1.25rem; font-weight: 700; color: var(--primary); margin-top: 2px;" id="billing-plan-name">Premium Monthly</h4>
+                                </div>
+                            </div>
+
+                            <div style="display: grid; grid-template-columns: 1.2fr 1fr; gap: 30px;">
+                                <!-- Left side: Plan information & details -->
+                                <div>
+                                    <h3 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--text-main);">Subscription Details</h3>
+                                    <div class="glass-card" style="padding: 20px; display: flex; flex-direction: column; gap: 14px;">
+                                        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px;">
+                                            <span style="color: var(--text-muted);">Status</span>
+                                            <strong id="billing-detail-status" style="color: var(--primary);">Active</strong>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px;">
+                                            <span style="color: var(--text-muted);">Expiration Date</span>
+                                            <strong id="billing-detail-expiry" style="color: var(--text-main);">July 06, 2026</strong>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 10px;">
+                                            <span style="color: var(--text-muted);">Self-Delivery Limit</span>
+                                            <strong style="color: var(--text-main);">Unlimited Orders</strong>
+                                        </div>
+                                        <div style="display: flex; justify-content: space-between;">
+                                            <span style="color: var(--text-muted);">Platform Commission</span>
+                                            <strong style="color: var(--secondary);">0% (Fixed Flat Rate)</strong>
+                                        </div>
+                                    </div>
+                                    
+                                    <div style="margin-top: 25px; padding: 15px; background: rgba(20, 184, 166, 0.05); border-radius: 10px; border: 1px solid rgba(20, 184, 166, 0.15); font-size: 0.8rem; line-height: 1.5; color: var(--text-muted);">
+                                        <i class="fa-solid fa-circle-info" style="color: var(--secondary); margin-right: 6px;"></i>
+                                        <strong>Platform Fee Policy:</strong> LuxeGrocer charges a flat monthly or annual subscription fee. All order earnings flow 100% directly from customers to your personal UPI VPA or Cash on Delivery collectors without any in                                 <!-- Right side: Renew plan payment form -->
+                                <div>
+                                    <h3 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--text-main);">Renew or Extend Plan</h3>
+                                    <form id="form-billing-renew" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;">
+                                        <div class="form-group">
+                                            <label>Select Subscription Tier</label>
+                                            <select id="billing-renew-plan-select" class="glass-input" required style="width: 100%;">
+                                                <option value="Premium Monthly">Premium Monthly Tier (₹499 / 30 Days)</option>
+                                                <option value="Premium Annual">Premium Annual Tier (₹4,999 / 365 Days)</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <!-- Mock payment fields -->
+                                        <div class="form-group">
+                                            <label>Cardholder Name</label>
+                                            <input type="text" class="glass-input" required placeholder="E.g., Store Owner Name" style="width: 100%;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Card Details</label>
+                                            <div style="display: flex; gap: 10px;">
+                                                <input type="text" class="glass-input" required placeholder="4242 4242 4242 4242" maxlength="19" style="flex: 2; text-align: center;">
+                                                <input type="text" class="glass-input" required placeholder="MM/YY" maxlength="5" style="flex: 1; text-align: center;">
+                                                <input type="password" class="glass-input" required placeholder="CVC" maxlength="3" style="flex: 0.8; text-align: center;">
+                                            </div>
+                                        </div>
+
+                                        <button type="submit" class="btn-premium" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-color: var(--primary);">
+                                            Process Subscription Payment
+                                        </button>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- View Pane 6: Store Coupons Pane -->
+                    <div id="owner-pane-coupons" class="owner-panel-pane" style="display: none;">
+                        <div class="glass-panel" style="padding: 30px;">
+                            <div class="section-header" style="margin-top: 0; margin-bottom: 25px; border-bottom: 1px solid var(--border-color); padding-bottom: 20px;">
+                                <h2>Store Coupons Manager</h2>
+                                <p>Create and manage discount codes exclusive to your store</p>
+                            </div>
+
+                            <div class="grid-2col" style="display: grid; grid-template-columns: 1fr 1.2fr; gap: 30px;">
+                                <!-- Left side: Create Coupon -->
+                                <div>
+                                    <h3 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--text-main);">Create New Coupon</h3>
+                                    <form id="form-coupon-create" class="checkout-form" style="display: flex; flex-direction: column; gap: 14px;">
+                                        <div class="form-group">
+                                            <label>Coupon Code</label>
+                                            <input type="text" id="coupon-create-code" class="glass-input" required placeholder="E.g., ORG10" style="width: 100%; text-transform: uppercase;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Discount Type</label>
+                                            <select id="coupon-create-type" class="glass-input" required style="width: 100%;">
+                                                <option value="fixed">Fixed Amount Discount (₹)</option>
+                                                <option value="free-delivery">Free Delivery</option>
+                                            </select>
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Discount Value (₹)</label>
+                                            <input type="number" id="coupon-create-value" class="glass-input" required min="0" placeholder="E.g., 50" style="width: 100%;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Minimum Purchase Required (₹)</label>
+                                            <input type="number" id="coupon-create-min" class="glass-input" required min="0" placeholder="E.g., 200" style="width: 100%;">
+                                        </div>
+                                        <div class="form-group">
+                                            <label>Coupon Description</label>
+                                            <input type="text" id="coupon-create-desc" class="glass-input" required placeholder="E.g., ₹50 off on fresh organic veggies above ₹200" style="width: 100%;">
+                                        </div>
+                                        
+                                        <button type="submit" class="btn-premium" style="width: 100%; margin-top: 10px; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-color: var(--primary);">
+                                            <i class="fa-solid fa-plus"></i> Create Coupon
+                                        </button>
+                                    </form>
+                                </div>
+
+                                <!-- Right side: Coupon List -->
+                                <div>
+                                    <h3 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--text-main);">Active Store Coupons</h3>
+                                    <div class="table-container" style="max-height: 450px; overflow-y: auto;">
+                                        <table class="data-table" style="width: 100%; border-collapse: collapse; text-align: left;">
+                                            <thead>
+                                                <tr style="border-bottom: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.85rem;">
+                                                    <th style="padding: 10px 5px;">Code</th>
+                                                    <th style="padding: 10px 5px;">Type</th>
+                                                    <th style="padding: 10px 5px;">Discount</th>
+                                                    <th style="padding: 10px 5px;">Min Order</th>
+                                                    <th style="padding: 10px 5px; text-align: right;">Action</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="owner-coupons-table-body">
+                                                <!-- Loaded dynamically -->
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
                         </div>
                     </div>
 
@@ -561,6 +776,68 @@
         </div>
     </div>
 
+    <!-- Assign Rider Modal -->
+    <div class="modal-overlay" id="modal-assign-rider" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 400px; padding: 32px; position: relative;">
+            <button type="button" class="modal-close" id="btn-close-assign-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 24px;">
+                <div style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 12px;"><i class="fa-solid fa-person-biking"></i></div>
+                <h3 style="font-size: 1.3rem; font-weight: 700; color: var(--text-main);">Dispatch Rider Assignment</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Assign a delivery partner to carry out order doorstep delivery.</p>
+            </div>
+            
+            <form id="form-assign-rider-dispatch" class="checkout-form" style="display: flex; flex-direction: column; gap: 20px;">
+                <input type="hidden" id="assign-rider-order-id">
+                <div class="form-group" style="margin: 0;">
+                    <label for="assign-rider-select" style="font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display: block;">Select Delivery Staff</label>
+                    <select id="assign-rider-select" class="glass-input" required style="width: 100%;">
+                        <!-- Dynamic options -->
+                    </select>
+                </div>
+                
+                <div id="assign-rider-empty-warning" style="display: none; font-size: 0.8rem; color: var(--danger); padding: 10px; border-radius: 6px; background: rgba(239, 68, 68, 0.05); border: 1px solid rgba(239, 68, 68, 0.15);">
+                    <i class="fa-solid fa-circle-exclamation" style="margin-right: 6px;"></i> No delivery staff available. Please register riders in Store Settings first.
+                </div>
+
+                <button type="submit" id="btn-confirm-assign-rider" class="btn-premium" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Confirm Dispatch & Assign Rider</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Suggest Substitution Modal -->
+    <div class="modal-overlay" id="modal-suggest-substitution" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 500px; padding: 32px; position: relative;">
+            <button type="button" class="modal-close" id="btn-close-substitute-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 12px;"><i class="fa-solid fa-arrows-rotate"></i></div>
+                <h3 style="font-size: 1.3rem; font-weight: 700; color: var(--text-main);">Propose Item Substitution</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Choose an alternative product from your digital catalog to offer the customer.</p>
+            </div>
+            
+            <form id="form-suggest-substitution" class="checkout-form">
+                <input type="hidden" id="substitute-order-id">
+                <input type="hidden" id="substitute-original-item-id">
+                
+                <div style="margin-bottom: 15px; padding: 12px; border-radius: 8px; background: rgba(255,255,255,0.02); border: 1.5px dashed var(--border-color); font-size: 0.85rem;">
+                    Original Out-of-Stock Item: <strong id="substitute-original-item-name" style="color: var(--danger);">Item Name</strong>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="substitute-select-product" style="font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display: block;">Select Substitute Product / Variant</label>
+                    <select id="substitute-select-product" class="glass-input" required style="width: 100%;">
+                        <!-- Populated dynamically with store products -->
+                    </select>
+                </div>
+                
+                <button type="submit" id="btn-confirm-substitute" class="btn-premium" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Send Swap Suggestion</button>
+            </form>
+        </div>
+    </div>
+
     <!-- Toast notification -->
     <div id="toast-notification" style="position: fixed; bottom: 24px; right: 24px; background: rgba(16,185,129,0.95); backdrop-filter: var(--glass-blur); border: 1px solid rgba(255,255,255,0.1); color: white; padding: 16px 24px; border-radius: 12px; box-shadow: var(--shadow-premium); display: flex; align-items: center; gap: 12px; z-index: 3000; transform: translateY(100px); opacity: 0; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); pointer-events: none;">
         <span id="toast-icon"><i class="fa-solid fa-circle-check"></i></span>
@@ -568,7 +845,7 @@
     </div>
 
     <!-- Scripts -->
-    <script src="store.js"></script>
-    <script src="merchant.js"></script>
+    <script src="store.js?v=debug2"></script>
+    <script src="merchant.js?v=debug2"></script>
 </body>
 </html>

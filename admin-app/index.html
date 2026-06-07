@@ -1,0 +1,299 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LuxeGrocer - Platform Admin Portal</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+    <!-- Auth Section -->
+    <div id="auth-container" class="auth-section">
+        <div class="auth-card glass-panel">
+            <div class="auth-header">
+                <i class="fa-solid fa-shield-halved auth-logo"></i>
+                <h1 class="gradient-text">LuxeGrocer</h1>
+                <p>Platform Administration Console</p>
+                <p id="admin-auth-seed-hint" style="font-size: 0.75rem; color: var(--primary); margin-top: 6px; font-weight: 500;"><i class="fa-solid fa-circle-info"></i> Demo: Use <strong>admin@luxe.com</strong> & <strong>admin123</strong> <a href="#" id="btn-autofill-admin-demo" style="margin-left: 8px; color: var(--accent); font-weight: 700; text-decoration: underline;">[Auto-Fill]</a></p>
+            </div>
+            <form id="login-form">
+                <div class="input-group">
+                    <label for="login-email">Admin Email</label>
+                    <div class="input-wrapper">
+                        <i class="fa-regular fa-envelope input-icon"></i>
+                        <input type="email" id="login-email" class="glass-input" placeholder="admin@luxe.com" value="admin@luxe.com" required>
+                    </div>
+                </div>
+                <div class="input-group">
+                    <label for="login-password">Password</label>
+                    <div class="input-wrapper">
+                        <i class="fa-solid fa-lock input-icon"></i>
+                        <input type="password" id="login-password" class="glass-input" placeholder="admin123" value="admin123" required>
+                    </div>
+                </div>
+                <button type="submit" class="btn-premium btn-block">
+                    <i class="fa-solid fa-right-to-bracket"></i> Authenticate
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Section -->
+    <div id="app-container" style="display: none;">
+        <!-- Navbar -->
+        <nav class="navbar">
+            <div class="nav-container container">
+                <div class="brand-logo">
+                    <i class="fa-solid fa-shield-halved gradient-text"></i>
+                    <span class="gradient-text">LuxeGrocer Admin</span>
+                </div>
+                <div class="nav-actions">
+                    <!-- Theme Toggle Button -->
+                    <button id="btn-theme-toggle" class="btn-outline btn-sm" title="Toggle Dark/Light Mode" style="border-radius: 50%; width: 32px; height: 32px; padding: 0; display: inline-flex; align-items: center; justify-content: center; margin-right: 8px;">
+                        <i class="fa-solid fa-moon"></i>
+                    </button>
+                    <span id="admin-name" class="admin-badge">Platform Administrator</span>
+                    <button id="btn-logout" class="btn-outline btn-sm">
+                        <i class="fa-solid fa-power-off"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <!-- Main Body -->
+        <main class="container main-content">
+            <!-- Navigation Tabs -->
+            <div class="tab-navigation">
+                <button class="nav-tab active" data-pane="dashboard">
+                    <i class="fa-solid fa-chart-line"></i> Dashboard
+                </button>
+                <button class="nav-tab" data-pane="stores">
+                    <i class="fa-solid fa-store"></i> Store Audits
+                </button>
+                <button class="nav-tab" data-pane="settlements">
+                    <i class="fa-solid fa-receipt"></i> Payout Settlements
+                </button>
+                <button class="nav-tab" data-pane="ledger">
+                    <i class="fa-solid fa-book-bookmark"></i> Ledger Book
+                </button>
+                <button class="nav-tab" data-pane="config">
+                    <i class="fa-solid fa-sliders"></i> System Config
+                </button>
+                <button class="nav-tab" data-pane="banners">
+                    <i class="fa-solid fa-rectangle-ad"></i> Banners Manager
+                </button>
+            </div>
+
+            <!-- Dashboard Pane -->
+            <div id="pane-dashboard" class="pane active">
+                <div class="stats-row">
+                    <div class="stat-card glass-card">
+                        <i class="fa-solid fa-indian-rupee-sign stat-icon"></i>
+                        <h4 id="stat-gross-volume">₹0.00</h4>
+                        <span>Total Revenue</span>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <i class="fa-solid fa-shop stat-icon"></i>
+                        <h4 id="stat-active-stores">0</h4>
+                        <span>Active Stores</span>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <i class="fa-solid fa-truck-ramp-box stat-icon"></i>
+                        <h4 id="stat-payouts-count">0</h4>
+                        <span>Settled Orders</span>
+                    </div>
+                    <div class="stat-card glass-card">
+                        <i class="fa-solid fa-hourglass-half stat-icon"></i>
+                        <h4 id="stat-pending-settlements">0</h4>
+                        <span>Pending Payouts</span>
+                    </div>
+                </div>
+
+                <div class="dashboard-grid">
+                    <div class="glass-panel panel-section">
+                        <h3><i class="fa-solid fa-triangle-exclamation"></i> Alerts & Approvals</h3>
+                        <div id="alerts-list" class="alerts-list">
+                            <!-- Populated dynamically -->
+                            <div class="empty-placeholder">No urgent alerts. System healthy.</div>
+                        </div>
+                    </div>
+                    
+                    <div class="glass-panel panel-section">
+                        <h3><i class="fa-solid fa-clock-rotate-left"></i> System Activity Logs</h3>
+                        <div id="system-logs-list" class="logs-list">
+                            <!-- Populated dynamically -->
+                            <div class="empty-placeholder">Waiting for activity logs...</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stores Pane -->
+            <div id="pane-stores" class="pane">
+                <div class="glass-panel panel-section">
+                    <div class="section-title-row">
+                        <h3><i class="fa-solid fa-store"></i> Merchant Registry Audits</h3>
+                        <button id="btn-refresh-stores" class="btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>Store Name</th>
+                                    <th>Owner Email</th>
+                                    <th>Category</th>
+                                    <th>Status</th>
+                                    <th>Subscription Plan</th>
+                                    <th>Expiration Date</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="stores-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Settlements Pane -->
+            <div id="pane-settlements" class="pane">
+                <div class="glass-panel panel-section">
+                    <div class="section-title-row">
+                        <h3><i class="fa-solid fa-receipt"></i> Direct UPI Settlement Center</h3>
+                        <button id="btn-refresh-settlements" class="btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>Order ID</th>
+                                    <th>Store Name</th>
+                                    <th>Grand Total</th>
+                                    <th>Payment Method</th>
+                                    <th>UTR Transaction ID</th>
+                                    <th>Timestamp</th>
+                                    <th>Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="settlements-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Ledger Pane -->
+            <div id="pane-ledger" class="pane">
+                <div class="glass-panel panel-section">
+                    <div class="section-title-row">
+                        <h3><i class="fa-solid fa-book-bookmark"></i> Double-Entry Accounting Ledger</h3>
+                        <button id="btn-refresh-ledger" class="btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                    </div>
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>Transaction ID</th>
+                                    <th>Order/Store Reference</th>
+                                    <th>Transaction Type</th>
+                                    <th>Debit (Money Out)</th>
+                                    <th>Credit (Money In)</th>
+                                    <th>Description</th>
+                                    <th>Timestamp</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ledger-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Config Pane -->
+            <div id="pane-config" class="pane">
+                <div class="glass-panel panel-section config-panel">
+                    <h3><i class="fa-solid fa-sliders"></i> Global System Configuration</h3>
+                    <form id="config-form">
+                        <div class="form-grid">
+                            <div class="form-group">
+                                <label for="config-trial-days">Subscription Free Trial Days</label>
+                                <input type="number" id="config-trial-days" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-monthly-fee">Premium Monthly Subscription (₹)</label>
+                                <input type="number" id="config-monthly-fee" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-yearly-fee">Premium Yearly Subscription (₹)</label>
+                                <input type="number" id="config-yearly-fee" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-base-fee">Base Delivery Charge (₹)</label>
+                                <input type="number" id="config-base-fee" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-base-radius">Base Delivery Radius (km)</label>
+                                <input type="number" id="config-base-radius" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-per-km-fee">Per Additional km Surcharge (₹)</label>
+                                <input type="number" id="config-per-km-fee" class="glass-input" min="0" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="config-free-threshold">Free Delivery Min. Order Threshold (₹)</label>
+                                <input type="number" id="config-free-threshold" class="glass-input" min="0" required>
+                            </div>
+                        </div>
+                        <button type="submit" class="btn-premium mt-20">
+                            <i class="fa-solid fa-circle-check"></i> Save Configurations
+                        </button>
+                    </form>
+                </div>
+            </div>
+
+            <!-- Banners Manager Pane -->
+            <div id="pane-banners" class="pane">
+                <div class="glass-panel panel-section">
+                    <h3><i class="fa-solid fa-rectangle-ad"></i> Promotional Banners Manager</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+                        Manage the banners displayed at the top of the Customer Storefront.
+                    </p>
+                    
+                    <form id="banner-form" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 30px; max-width: 600px;">
+                        <div class="form-group">
+                            <label for="banner-text" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main);">Banner Text</label>
+                            <input type="text" id="banner-text" class="glass-input" placeholder="e.g., Get 20% off on all organic vegetables!" required style="width: 100%;">
+                        </div>
+                        <div class="form-group">
+                            <label for="banner-image-url" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main);">Banner Image URL (Optional)</label>
+                            <input type="url" id="banner-image-url" class="glass-input" placeholder="e.g., https://images.unsplash.com/..." style="width: 100%;">
+                        </div>
+                        <div class="form-group" style="display: flex; align-items: center; gap: 8px;">
+                            <input type="checkbox" id="banner-active" checked style="width: 18px; height: 18px; cursor: pointer;">
+                            <label for="banner-active" style="font-size: 0.85rem; color: var(--text-main); cursor: pointer;">Active and Visible immediately</label>
+                        </div>
+                        <button type="submit" class="btn-premium" style="align-self: flex-start; padding: 10px 20px;">
+                            <i class="fa-solid fa-plus"></i> Add Banner
+                        </button>
+                    </form>
+
+                    <h4 style="margin-bottom: 15px;">Active Promotional Banners</h4>
+                    <div id="admin-banner-list" class="table-container" style="max-width: 800px;">
+                        <!-- List loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Notification Toast -->
+    <div id="toast" class="toast-notification"></div>
+
+    <script src="admin.js?v=debug2"></script>
+</body>
+</html>

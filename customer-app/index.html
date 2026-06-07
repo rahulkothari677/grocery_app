@@ -46,6 +46,11 @@
                 </button>
 
 
+                <!-- Theme Toggle Button -->
+                <button class="btn-icon" id="btn-theme-toggle" title="Toggle Dark/Light Mode" style="border: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-main); width: 38px; height: 38px; display: inline-flex; align-items: center; justify-content: center; border-radius: 50%; margin-right: 8px;">
+                    <i class="fa-solid fa-moon"></i>
+                </button>
+
                 <!-- Shopping Cart Icon Button -->
                 <button class="btn-icon" id="btn-cart" style="position: relative;">
                     <i class="fa-solid fa-bag-shopping"></i>
@@ -70,6 +75,16 @@
                 <div style="display: flex; align-items: center; gap: 6px; color: var(--secondary);">
                     <i class="fa-solid fa-bolt" style="animation: pulse 1.5s infinite; font-size: 0.75rem;"></i>
                     <span id="delivery-speed-text">Delivery Speed: <strong>Instant (10-15 Mins)</strong></span>
+                </div>
+            </div>
+
+            <!-- Promotional Banners Carousel -->
+            <div id="promo-banner-carousel" class="glass-panel" style="margin-top: 20px; border-radius: 16px; overflow: hidden; position: relative; height: 150px; box-shadow: var(--shadow-premium); border: 1px solid var(--border-color); display: none;">
+                <div id="promo-banner-slides" style="width: 100%; height: 100%; position: relative;">
+                    <!-- Slides loaded dynamically -->
+                </div>
+                <!-- Navigation Dots -->
+                <div id="promo-banner-dots" style="position: absolute; bottom: 10px; left: 50%; transform: translateX(-50%); display: flex; gap: 8px; z-index: 10;">
                 </div>
             </div>
 
@@ -292,13 +307,37 @@
                             <h3 style="font-size: 1.1rem; margin-bottom: 12px;">Direct Settlement Selection</h3>
                             <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Orders are delivered directly by the store. Settlement can be done Cash-on-Delivery (COD) or UPI directly to the delivery rider.</p>
                             
-                            <div style="display: flex; gap: 15px;">
-                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
-                                    <input type="radio" name="payment-method" value="upi" checked style="accent-color: var(--primary);"> UPI / Scan QR Code
-                                </label>
-                                <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
-                                    <input type="radio" name="payment-method" value="cod" style="accent-color: var(--primary);"> Cash on Delivery
-                                </label>
+                            <div style="display: flex; flex-direction: column; gap: 10px;">
+                                <div style="display: flex; gap: 15px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
+                                        <input type="radio" name="payment-method" value="upi" checked style="accent-color: var(--primary);"> UPI / Scan QR Code
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
+                                        <input type="radio" name="payment-method" value="cod" style="accent-color: var(--primary);"> Cash on Delivery
+                                    </label>
+                                </div>
+                                <div style="display: flex; gap: 15px;">
+                                    <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer; background: rgba(255,255,255,0.02); border: 1px solid var(--border-color); padding: 12px 20px; border-radius: 10px; flex-grow: 1;">
+                                        <input type="radio" name="payment-method" value="wallet" style="accent-color: var(--primary);"> Pay via Wallet (Balance: <span id="checkout-wallet-balance-val">₹0.00</span>)
+                                    </label>
+                                </div>
+                            </div>
+                            
+                            <!-- Split Payment Info Box (shown if grand total > wallet balance when wallet selected) -->
+                            <div id="checkout-wallet-split-box" class="glass-panel" style="display: none; padding: 15px; border: 1.5px dashed var(--accent); border-radius: 10px; margin-top: 15px; background: rgba(245, 158, 11, 0.03);">
+                                <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--accent); margin-bottom: 5px;">Split Payment Activated</h4>
+                                <p style="font-size: 0.8rem; color: var(--text-main); margin-bottom: 8px;">
+                                    Your wallet balance is insufficient. We will apply your entire wallet balance of <strong id="checkout-split-wallet-applied">₹0.00</strong>.
+                                    The remaining <strong id="checkout-split-remaining">₹0.00</strong> will be paid on delivery.
+                                </p>
+                                <div style="display: flex; gap: 15px;">
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
+                                        <input type="radio" name="wallet-split-method" value="upi" checked style="accent-color: var(--primary);"> Pay Remaining via UPI
+                                    </label>
+                                    <label style="display: flex; align-items: center; gap: 6px; font-size: 0.85rem; cursor: pointer;">
+                                        <input type="radio" name="wallet-split-method" value="cod" style="accent-color: var(--primary);"> Pay Remaining via COD
+                                    </label>
+                                </div>
                             </div>
                         </div>
 
@@ -364,6 +403,12 @@
                     <div class="tracker-id" id="tracker-order-id">#ORDER-104921</div>
                 </div>
 
+                <!-- Selector for multi-store checkouts -->
+                <div id="tracker-multi-store-selector" style="display: none; margin-bottom: 20px; background: rgba(255, 255, 255, 0.03); padding: 12px 16px; border-radius: 10px; border: 1px solid var(--border-color); align-items: center; justify-content: space-between; gap: 12px;">
+                    <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);"><i class="fa-solid fa-layer-group"></i> Multi-Store Shipment:</span>
+                    <select id="select-tracker-sub-order" class="glass-input" style="width: auto; padding: 6px 30px 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 20px; margin: 0; background: rgba(0,0,0,0.25); border: 1.5px solid var(--border-color); color: white;"></select>
+                </div>
+
                 <!-- Cancel Order Grace Timer -->
                 <div class="glass-panel" id="cancel-grace-box" style="padding: 16px; border: 1.5px dashed var(--danger); border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; background: rgba(239, 68, 68, 0.02);">
                     <div style="display: flex; align-items: center; gap: 12px;">
@@ -381,6 +426,23 @@
                     <button type="button" class="btn-outline" id="btn-cancel-order" style="border-color: var(--danger); color: var(--danger); font-size: 0.8rem; padding: 6px 12px; border-radius: 8px; white-space: nowrap;">Cancel Order</button>
                 </div>
 
+                <!-- Out-of-Stock Substitution Box -->
+                <div class="glass-panel" id="tracker-substitution-box" style="padding: 20px; border: 1.5px solid var(--accent); border-radius: 12px; margin-bottom: 20px; display: none; flex-direction: column; gap: 15px; background: rgba(245, 158, 11, 0.03);">
+                    <div style="display: flex; align-items: flex-start; gap: 12px;">
+                        <span style="font-size: 2rem;">🔄</span>
+                        <div style="flex-grow: 1;">
+                            <h4 style="font-size: 1rem; font-weight: 700; color: var(--accent);">Item Substitution Proposal</h4>
+                            <p style="font-size: 0.85rem; color: var(--text-main); margin-top: 4px;" id="tracker-substitution-text">
+                                The store suggested replacing your out-of-stock item with an alternative.
+                            </p>
+                        </div>
+                    </div>
+                    <div style="display: flex; gap: 12px; justify-content: flex-end; margin-top: 5px;">
+                        <button type="button" class="btn-outline" id="btn-tracker-decline-sub" style="border-color: var(--danger); color: var(--danger); font-size: 0.8rem; padding: 8px 16px; border-radius: 8px;"><i class="fa-solid fa-trash-can"></i> Decline & Remove Item</button>
+                        <button type="button" class="btn-premium" id="btn-tracker-accept-sub" style="font-size: 0.8rem; padding: 8px 16px; border-radius: 8px; background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%); border-color: var(--primary);"><i class="fa-solid fa-check"></i> Accept Swap</button>
+                    </div>
+                </div>
+
                 <!-- Doorstep OTP Verification Card -->
                 <div class="glass-panel" id="tracker-otp-box" style="padding: 16px; border: 1.5px solid var(--primary); border-radius: 12px; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-between; background: rgba(16, 185, 129, 0.02);">
                     <div style="display: flex; align-items: center; gap: 12px;">
@@ -394,6 +456,18 @@
                         <span style="font-size: 0.7rem; text-transform: uppercase; color: var(--text-muted); display: block; font-weight: bold; letter-spacing: 0.5px;">Delivery OTP</span>
                         <strong style="font-size: 1.4rem; color: var(--primary); font-family: monospace; letter-spacing: 2px;" id="tracker-otp-code">0000</strong>
                     </div>
+                </div>
+
+                <!-- Assigned Rider Contact Card -->
+                <div class="glass-panel" id="tracker-rider-box" style="padding: 16px; border: 1.5px solid var(--secondary); border-radius: 12px; margin-bottom: 20px; display: none; align-items: center; justify-content: space-between; background: rgba(59, 130, 246, 0.02);">
+                    <div style="display: flex; align-items: center; gap: 12px;">
+                        <span style="font-size: 2.2rem; filter: drop-shadow(0 2px 4px rgba(0,0,0,0.2));">🛵</span>
+                        <div>
+                            <h4 style="font-size: 0.95rem; font-weight: 600; color: var(--text-main);"><span id="tracker-rider-name">Rider Name</span></h4>
+                            <p style="font-size: 0.75rem; color: var(--text-muted); margin-top: 2px;">Your neighborhood store delivery partner is on the way.</p>
+                        </div>
+                    </div>
+                    <a href="#" id="btn-call-rider" class="btn-premium btn-icon-text" style="padding: 8px 16px; font-size: 0.8rem; background: var(--secondary); border-color: var(--secondary); display: flex; align-items: center; gap: 6px; text-decoration: none; color: white;"><i class="fa-solid fa-phone"></i> Call Rider</a>
                 </div>
 
                 <!-- Simulation Progress Controller (For demo validation) -->
@@ -415,6 +489,25 @@
                 <!-- Timeline Steps -->
                 <div class="tracker-timeline" id="tracker-timeline-steps">
                     <!-- Dynamic updates based on state -->
+                </div>
+
+                <!-- Real-time chat box connect -->
+                <div class="glass-panel" id="tracker-chat-box" style="padding: 16px; border: 1px solid var(--border-color); border-radius: 12px; margin-top: 20px; display: flex; flex-direction: column; gap: 10px;">
+                    <h4 style="font-size: 0.95rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 8px; cursor: pointer; margin: 0;" id="btn-toggle-customer-chat">
+                        <i class="fa-solid fa-comments" style="color: var(--secondary);"></i> 
+                        <span>Message Store Support</span>
+                        <span class="chat-badge" id="customer-chat-badge" style="background: var(--accent); color: var(--text-dark); padding: 1px 6px; border-radius: 10px; font-size: 0.7rem; font-weight: bold; display: none;">0</span>
+                        <i class="fa-solid fa-chevron-down" id="customer-chat-chevron" style="margin-left: auto; font-size: 0.8rem; transition: transform 0.3s; color: var(--text-muted);"></i>
+                    </h4>
+                    <div id="customer-chat-drawer" style="display: none; flex-direction: column; gap: 10px; margin-top: 5px;">
+                        <div id="customer-chat-messages" style="max-height: 180px; overflow-y: auto; background: rgba(0,0,0,0.2); padding: 10px; border-radius: 8px; display: flex; flex-direction: column; gap: 8px;">
+                            <!-- Filled dynamically -->
+                        </div>
+                        <form id="customer-chat-form" style="display: flex; gap: 8px; margin: 0;">
+                            <input type="text" id="customer-chat-input" class="glass-input" placeholder="Type message to merchant..." required style="flex-grow: 1; padding: 6px 12px; font-size: 0.85rem; height: 36px; border-radius: 8px; background: rgba(255,255,255,0.03); color: white; border: 1px solid var(--border-color);">
+                            <button type="submit" class="btn-premium" style="padding: 6px 16px; font-size: 0.85rem; height: 36px; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-paper-plane"></i></button>
+                        </form>
+                    </div>
                 </div>
 
                 <div style="display: flex; justify-content: center; gap: 16px; margin-top: 20px;">
@@ -451,11 +544,12 @@
         </div>
         
         <!-- Account navigation tabs -->
-        <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 15px;">
+        <div style="display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 15px; overflow-x: auto; white-space: nowrap;">
             <button class="account-tab-btn active" id="tab-btn-profile" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid var(--primary); color: white; font-weight: 600; cursor: pointer; font-size: 0.85rem;">Profile</button>
             <button class="account-tab-btn" id="tab-btn-addresses" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Addresses</button>
             <button class="account-tab-btn" id="tab-btn-history" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Orders</button>
             <button class="account-tab-btn" id="tab-btn-vouchers" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Vouchers</button>
+            <button class="account-tab-btn" id="tab-btn-wallet" style="flex: 1; padding: 12px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--text-muted); font-weight: 600; cursor: pointer; font-size: 0.85rem;">Wallet</button>
         </div>
 
         <!-- Tab Content areas -->
@@ -463,6 +557,16 @@
             
             <!-- Tab 1: Profile Details -->
             <div id="pane-account-profile" class="account-pane">
+                <div class="glass-panel" style="padding: 16px; margin-bottom: 20px; border-left: 4px solid var(--primary); background: rgba(255, 255, 255, 0.02); display: flex; flex-direction: column; gap: 8px;">
+                    <h4 style="margin: 0; font-size: 0.95rem; color: var(--text-main);"><i class="fa-solid fa-gift" style="color: var(--primary); margin-right: 6px;"></i> Refer & Earn ₹50!</h4>
+                    <p style="font-size: 0.8rem; color: var(--text-muted); margin: 0; line-height: 1.4;">
+                        Invite your friends! They get ₹100 on signup, and you get ₹50 in wallet credits when they place their first order.
+                    </p>
+                    <div style="display: flex; align-items: center; justify-content: space-between; background: rgba(255,255,255,0.03); padding: 8px 12px; border-radius: 8px; border: 1px dashed var(--border-color); margin-top: 4px;">
+                        <span style="font-size: 0.8rem; color: var(--text-muted);">Your Referral Code:</span>
+                        <strong style="color: var(--primary); font-family: monospace; font-size: 0.95rem; letter-spacing: 0.5px;" id="account-referral-code">Loading...</strong>
+                    </div>
+                </div>
                 <form id="form-account-profile" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;">
                     <div class="form-group">
                         <label>Full Name</label>
@@ -555,6 +659,23 @@
                 <div id="account-voucher-list" style="display: flex; flex-direction: column; gap: 12px;">
                     <!-- Injected dynamically -->
                 </div>
+            </div>
+
+            <!-- Tab 5: Wallet -->
+            <div id="pane-account-wallet" class="account-pane" style="display: none;">
+                <div class="glass-panel" style="padding: 20px; border-radius: 12px; text-align: center; background: rgba(255, 255, 255, 0.03); margin-bottom: 20px;">
+                    <div style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 8px;">Available Balance</div>
+                    <div style="font-size: 2.2rem; font-weight: 800; color: var(--primary);" id="account-wallet-balance">₹0.00</div>
+                </div>
+                
+                <form id="form-add-funds" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;" onsubmit="event.preventDefault();">
+                    <h3 style="font-size: 1.05rem; margin-bottom: 5px; color: var(--text-main);"><i class="fa-solid fa-wallet" style="color: var(--primary);"></i> Add Funds</h3>
+                    <div class="form-group">
+                        <label>Amount to Add (₹)</label>
+                        <input type="number" id="wallet-add-amount" class="glass-input" required min="10" placeholder="E.g., 500" value="500">
+                    </div>
+                    <button type="submit" class="btn-premium" style="width:100%; margin-top: 10px;" id="btn-add-funds-submit">Add Funds</button>
+                </form>
             </div>
 
         </div>
@@ -656,59 +777,31 @@
                 <h3>Direct UPI Settlement</h3>
                 <button class="modal-close" id="btn-close-upi-modal"><i class="fa-solid fa-xmark"></i></button>
             </div>
-            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Scan this simulated QR code to settle the order directly with the merchant.</p>
+            <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 15px;">Scan this dynamically configured QR code with any UPI app (GPay, PhonePe, Paytm) to transfer directly to the merchant.</p>
             
-            <div style="background: white; padding: 20px; border-radius: 16px; display: inline-block; box-shadow: var(--shadow-premium); margin-bottom: 20px;">
-                <svg width="200" height="200" viewBox="0 0 100 100" style="display: block;">
-                    <rect width="100" height="100" fill="white"/>
-                    <rect x="5" y="5" width="25" height="25" fill="black"/>
-                    <rect x="8" y="8" width="19" height="19" fill="white"/>
-                    <rect x="11" y="11" width="13" height="13" fill="black"/>
-                    
-                    <rect x="70" y="5" width="25" height="25" fill="black"/>
-                    <rect x="73" y="8" width="19" height="19" fill="white"/>
-                    <rect x="76" y="11" width="13" height="13" fill="black"/>
-                    
-                    <rect x="5" y="70" width="25" height="25" fill="black"/>
-                    <rect x="8" y="73" width="19" height="19" fill="white"/>
-                    <rect x="11" y="76" width="13" height="13" fill="black"/>
-                    
-                    <rect x="35" y="5" width="5" height="10" fill="black"/>
-                    <rect x="45" y="10" width="10" height="5" fill="black"/>
-                    <rect x="60" y="15" width="5" height="15" fill="black"/>
-                    <rect x="35" y="25" width="15" height="5" fill="black"/>
-                    
-                    <rect x="5" y="35" width="10" height="5" fill="black"/>
-                    <rect x="10" y="45" width="5" height="10" fill="black"/>
-                    <rect x="25" y="55" width="10" height="5" fill="black"/>
-                    <rect x="15" y="60" width="5" height="5" fill="black"/>
-                    
-                    <rect x="35" y="35" width="30" height="30" fill="black"/>
-                    <rect x="40" y="40" width="20" height="20" fill="white"/>
-                    <rect x="45" y="45" width="10" height="10" fill="black"/>
-                    
-                    <rect x="70" y="35" width="10" height="10" fill="black"/>
-                    <rect x="85" y="40" width="10" height="5" fill="black"/>
-                    <rect x="75" y="50" width="5" height="15" fill="black"/>
-                    <rect x="85" y="60" width="10" height="10" fill="black"/>
-                    
-                    <rect x="35" y="75" width="10" height="5" fill="black"/>
-                    <rect x="50" y="80" width="5" height="15" fill="black"/>
-                    <rect x="40" y="90" width="25" height="5" fill="black"/>
-                    
-                    <rect x="75" y="75" width="15" height="15" fill="black"/>
-                </svg>
+            <div style="background: white; padding: 15px; border-radius: 16px; display: inline-block; box-shadow: var(--shadow-premium); margin-bottom: 15px;">
+                <img id="upi-qr-image" src="" alt="UPI QR Code" style="width: 200px; height: 200px; display: block; border-radius: 8px;">
             </div>
             
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 15px; line-height: 1.4;">
+                <div>UPI VPA: <strong id="upi-payee-vpa" style="color: var(--text-main);"></strong></div>
+                <div>Payee Name: <strong id="upi-payee-name" style="color: var(--text-main);"></strong></div>
+            </div>
+
             <div style="font-size: 1.3rem; font-weight: 800; margin-bottom: 4px;" id="upi-grand-total">₹0.00</div>
-            <div style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-bottom: 24px; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                <i class="fa-solid fa-shield-halved"></i> Secured Direct Settlement (LuxePay)
+            <div style="font-size: 0.8rem; color: var(--primary); font-weight: 600; margin-bottom: 20px; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                <i class="fa-solid fa-shield-halved"></i> Direct Peer-to-Peer Payment Settle
             </div>
             
-            <div id="upi-loader-content">
-                <div style="width: 30px; height: 30px; border: 3px solid var(--border-color); border-top-color: var(--primary); border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; margin-bottom: 12px;"></div>
-                <p style="font-size: 0.85rem; color: var(--text-muted);">Waiting for bank payment confirmation...</p>
-            </div>
+            <form id="form-upi-payment-confirmation" class="checkout-form" style="display: flex; flex-direction: column; gap: 12px; margin-top: 10px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                <div class="form-group" style="text-align: left; margin: 0;">
+                    <label style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">UPI Transaction ID / Ref No. (UTR)</label>
+                    <input type="text" id="upi-transaction-id" class="glass-input" required placeholder="12-digit UTR or Ref number" style="width: 100%; text-align: center; font-family: monospace; letter-spacing: 1px;">
+                </div>
+                <button type="submit" id="btn-submit-upi-transaction" class="btn-premium" style="width: 100%; padding: 10px;">
+                    Confirm & Submit Order
+                </button>
+            </form>
         </div>
     </div>
 
@@ -743,17 +836,18 @@
                 <div style="font-size: 2.5rem; color: var(--primary); margin-bottom: 8px;"><i class="fa-solid fa-user-shield"></i></div>
                 <h3 id="auth-modal-title" style="font-size: 1.5rem; font-weight: 700;">Welcome to LuxeGrocer</h3>
                 <p id="auth-modal-subtitle" style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Sign in to access premium local catalog shelves</p>
+                <p id="auth-modal-seed-hint" style="font-size: 0.75rem; color: var(--primary); margin-top: 6px; font-weight: 500;"><i class="fa-solid fa-circle-info"></i> Demo: Use <strong>rahul@luxe.com</strong> & <strong>admin123</strong> <a href="#" id="btn-autofill-customer-demo" style="margin-left: 8px; color: var(--accent); font-weight: 700; text-decoration: underline;">[Auto-Fill]</a></p>
             </div>
             
             <!-- Login Form -->
             <form id="form-customer-login" style="display: flex; flex-direction: column; gap: 16px;">
                 <div class="input-group">
                     <label for="login-email" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Email Address</label>
-                    <input type="email" id="login-email" class="glass-input" required placeholder="you@luxe.com" style="width: 100%;">
+                    <input type="email" id="login-email" class="glass-input" required placeholder="rahul@luxe.com" value="rahul@luxe.com" style="width: 100%;">
                 </div>
                 <div class="input-group">
                     <label for="login-password" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Password</label>
-                    <input type="password" id="login-password" class="glass-input" required placeholder="••••••••" style="width: 100%;">
+                    <input type="password" id="login-password" class="glass-input" required placeholder="admin123" value="admin123" style="width: 100%;">
                 </div>
                 <div style="text-align: right; margin-top: -8px;">
                     <a href="#" id="link-forgot-password" style="color: var(--text-muted); font-size: 0.75rem; text-decoration: none;">Forgot Password?</a>
@@ -785,6 +879,10 @@
                 <div class="input-group">
                     <label for="reg-address" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Delivery Address</label>
                     <input type="text" id="reg-address" class="glass-input" required placeholder="Apartment, Street, Area" style="width: 100%;">
+                </div>
+                <div class="input-group">
+                    <label for="reg-referral" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 4px; display: block;">Referral Code (Optional)</label>
+                    <input type="text" id="reg-referral" class="glass-input" placeholder="E.g., REF-ALEX-123" style="width: 100%; text-transform: uppercase;">
                 </div>
                 <button type="submit" class="btn-premium" style="width: 100%; margin-top: 8px; padding: 12px;">Create Account</button>
                 <div style="text-align: center; font-size: 0.85rem; color: var(--text-muted); margin-top: 8px;">
@@ -870,7 +968,7 @@
     </div>
 
     <!-- Script Hooks -->
-    <script src="store.js"></script>
-    <script src="app.js"></script>
+    <script src="store.js?v=debug2"></script>
+    <script src="app.js?v=debug2"></script>
 </body>
 </html>

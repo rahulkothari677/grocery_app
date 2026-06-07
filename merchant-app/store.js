@@ -217,6 +217,86 @@ class LuxeStore {
         }
     }
 
+    async getDeliveryStaff(storeId) {
+        try {
+            const res = await fetch(`${this.baseUrl}/stores/${storeId}/delivery-staff`, {
+                headers: this.getHeaders()
+            });
+            return await res.json();
+        } catch (err) {
+            console.error("API error fetching delivery staff:", err);
+            return [];
+        }
+    }
+
+    async addDeliveryStaff(storeId, staffData) {
+        try {
+            const res = await fetch(`${this.baseUrl}/stores/${storeId}/delivery-staff`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(staffData)
+            });
+            return await res.json();
+        } catch (err) {
+            console.error("API error adding delivery staff:", err);
+            return null;
+        }
+    }
+
+    async deleteDeliveryStaff(storeId, staffId) {
+        try {
+            const res = await fetch(`${this.baseUrl}/stores/${storeId}/delivery-staff/${staffId}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+            return res.ok;
+        } catch (err) {
+            console.error("API error deleting delivery staff:", err);
+            return false;
+        }
+    }
+
+    // --- Coupon Management ---
+    async getCoupons() {
+        try {
+            const res = await fetch(`${this.baseUrl}/vouchers`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) return await res.json();
+            return [];
+        } catch (err) {
+            console.error("API error loading coupons:", err);
+            return [];
+        }
+    }
+
+    async createCoupon(couponData) {
+        try {
+            const res = await fetch(`${this.baseUrl}/vouchers`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify(couponData)
+            });
+            return await res.json();
+        } catch (err) {
+            console.error("API error creating coupon:", err);
+            return null;
+        }
+    }
+
+    async deleteCoupon(code) {
+        try {
+            const res = await fetch(`${this.baseUrl}/vouchers/${code}`, {
+                method: 'DELETE',
+                headers: this.getHeaders()
+            });
+            return res.ok;
+        } catch (err) {
+            console.error("API error deleting coupon:", err);
+            return false;
+        }
+    }
+
     // --- Product Management (API Backend) ---
     async addProduct(storeId, productData) {
         try {

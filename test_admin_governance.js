@@ -167,8 +167,9 @@ async function runTest() {
     if (!verifyRes.ok) throw new Error(`Verification settlement failed: ${await verifyRes.text()}`);
     const verifyData = await verifyRes.json();
     console.log(`  Payout settled: ${verifyData.order.payoutSettled}, Settle Amount: ₹${verifyData.payoutAmount}`);
-    if (!verifyData.order.payoutSettled || verifyData.payoutAmount !== 260) {
-        throw new Error("Expected payoutSettled to be true and payout amount to match ₹260 grand total.");
+    const expectedTotal = order.grandTotal;
+    if (!verifyData.order.payoutSettled || verifyData.payoutAmount !== expectedTotal) {
+        throw new Error(`Expected payoutSettled to be true and payout amount to match ₹${expectedTotal} grand total.`);
     }
 
     // Admin fetches ledger
@@ -186,10 +187,10 @@ async function runTest() {
     console.log(`  Payment credit entry -> credit: ₹${paymentLine ? paymentLine.credit : 0}, debit: ₹${paymentLine ? paymentLine.debit : 0}`);
     console.log(`  Payout debit entry -> credit: ₹${payoutLine ? payoutLine.credit : 0}, debit: ₹${payoutLine ? payoutLine.debit : 0}`);
 
-    if (!paymentLine || paymentLine.credit !== 260 || paymentLine.debit !== 0) {
+    if (!paymentLine || paymentLine.credit !== expectedTotal || paymentLine.debit !== 0) {
         throw new Error("Invalid ledger journal payment line details.");
     }
-    if (!payoutLine || payoutLine.debit !== 260 || payoutLine.credit !== 0) {
+    if (!payoutLine || payoutLine.debit !== expectedTotal || payoutLine.credit !== 0) {
         throw new Error("Invalid ledger journal payout line details.");
     }
     console.log("PASS: Payout settlement verification and accounting ledger double-entry lines successfully checked.");

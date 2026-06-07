@@ -127,6 +127,12 @@ async function runTest() {
         minOrderValue: 100,
         desc: '10% off on GreenValley Dairy Boutique'
     };
+    // Ensure leftover coupon from previous failed run is cleared
+    await fetch(`${BASE_URL}/vouchers/${dairyVoucherCode}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${dairyToken}` }
+    });
+
     const createVoucherRes = await fetch(`${BASE_URL}/vouchers`, {
         method: 'POST',
         headers: {

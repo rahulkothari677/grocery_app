@@ -66,7 +66,7 @@ async function runTest() {
 
     // --- TEST B: INSUFFICIENT BALANCE ERROR ---
     console.log("\n--- TEST B: Insufficient Balance Rejection ---");
-    // Place a very large order (above ₹1500 wallet balance)
+    const targetQuantity = Math.ceil((balance + 500) / 240);
     const largeOrderRes = await fetch(`${BASE_URL}/orders`, {
         method: 'POST',
         headers: {
@@ -76,7 +76,7 @@ async function runTest() {
         body: JSON.stringify({
             storeId: 'store-1',
             items: [
-                { id: 'p1-3', name: 'Artisanal Butter (Salted)', price: 240.00, quantity: 10, emoji: '🧈' } // ₹2400
+                { id: 'p1-3', name: 'Artisanal Butter (Salted)', price: 240.00, quantity: targetQuantity, emoji: '🧈' }
             ],
             deliveryFee: 0,
             discount: 0,

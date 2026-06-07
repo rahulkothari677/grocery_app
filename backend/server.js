@@ -32,7 +32,7 @@ app.use(helmet({
 // Main API Rate Limiter
 const apiLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 200, // limit each IP to 200 requests per windowMs
+    max: (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') ? 10000 : 200, // higher limit in dev/test
     message: { error: 'Too many requests from this IP, please try again after 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false
@@ -41,7 +41,7 @@ const apiLimiter = rateLimit({
 // Auth-specific Rate Limiter (Brute-Force Protection)
 const authLimiter = rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
-    max: 25, // limit each IP to 25 attempts per windowMs
+    max: (process.env.NODE_ENV === 'development' || process.env.NODE_ENV === 'test') ? 5000 : 25, // higher limit in dev/test
     message: { error: 'Too many authentication attempts, please try again after 15 minutes' },
     standardHeaders: true,
     legacyHeaders: false

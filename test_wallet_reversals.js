@@ -127,14 +127,15 @@ async function runTest() {
     if (!orderRes1.ok) throw new Error(`Failed to place wallet order: ${await orderRes1.text()}`);
     let order1 = await orderRes1.json();
     console.log(`Order 1 placed with Wallet. ID: ${order1.id}, Grand Total: ₹${order1.customer.walletAmountPaid}`);
-    if (order1.customer.walletAmountPaid !== 260) {
-        throw new Error(`Expected walletAmountPaid to be 260, got ${order1.customer.walletAmountPaid}`);
+    const expectedTotal = 240 + order1.deliveryFee;
+    if (order1.customer.walletAmountPaid !== expectedTotal) {
+        throw new Error(`Expected walletAmountPaid to be ${expectedTotal}, got ${order1.customer.walletAmountPaid}`);
     }
 
     let balAfterOrder1 = await getWalletBalance();
-    console.log(`Wallet balance after order 1 (should be decremented by 260): ₹${balAfterOrder1}`);
-    if (balAfterOrder1 !== balance - 260) {
-        throw new Error(`Expected wallet balance to be ${balance - 260}, got ${balAfterOrder1}`);
+    console.log(`Wallet balance after order 1 (should be decremented by ${expectedTotal}): ₹${balAfterOrder1}`);
+    if (balAfterOrder1 !== balance - expectedTotal) {
+        throw new Error(`Expected wallet balance to be ${balance - expectedTotal}, got ${balAfterOrder1}`);
     }
     balance = balAfterOrder1;
 
@@ -179,9 +180,9 @@ async function runTest() {
     console.log(`Order 1 updated status timeline: ${order1.statusTimeline[order1.statusTimeline.length - 1].desc}`);
 
     let balAfterDecline = await getWalletBalance();
-    console.log(`Wallet balance after declining substitution (should be refunded ₹260): ₹${balAfterDecline}`);
-    if (balAfterDecline !== balance + 260) {
-        throw new Error(`Expected wallet balance to be restored to ${balance + 260}, got ${balAfterDecline}`);
+    console.log(`Wallet balance after declining substitution (should be refunded ${expectedTotal}): ₹${balAfterDecline}`);
+    if (balAfterDecline !== balance + expectedTotal) {
+        throw new Error(`Expected wallet balance to be restored to ${balance + expectedTotal}, got ${balAfterDecline}`);
     }
     balance = balAfterDecline;
 

@@ -761,7 +761,7 @@ app.post('/api/auth/register', (req, res) => {
         walletBalance: walletBalance,
         referredBy: referredBy,
         referralClaimed: false,
-        referralCode: 'REF-' + userId.substring(5, 11).toUpperCase()
+        referralCode: 'REF-' + Math.random().toString(36).substring(2, 8).toUpperCase()
     };
     
     if (role === 'merchant') {

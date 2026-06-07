@@ -273,6 +273,17 @@ function seedDefaultUsers(dbData) {
     });
 }
 
+const defaultCategories = [
+    { id: 'dairy', name: 'Dairy & Fresh', parentId: null },
+    { id: 'milk', name: 'Fresh Milk', parentId: 'dairy' },
+    { id: 'yogurt', name: 'Yogurt & Cream', parentId: 'dairy' },
+    { id: 'cheese', name: 'Artisanal Cheese', parentId: 'dairy' },
+    { id: 'paneer', name: 'Fresh Paneer', parentId: 'cheese' },
+    { id: 'fruits', name: 'Fruits & Berries', parentId: null },
+    { id: 'bakery', name: 'Artisan Bakery', parentId: null },
+    { id: 'beverages', name: 'Beverages', parentId: null }
+];
+
 // --- Database Mongoose Connection & Fallbacks ---
 const mongoose = require('mongoose');
 
@@ -466,6 +477,43 @@ function readDb() {
             dbData.ledger = [];
             changed = true;
         }
+
+        if (!dbData.categories) {
+            dbData.categories = JSON.parse(JSON.stringify(defaultCategories));
+            changed = true;
+        }
+
+        dbData.users.forEach(u => {
+            if (u.status === undefined) {
+                u.status = 'Active';
+                changed = true;
+            }
+        });
+
+        const defaultHours = {
+            monday: { open: "09:00", close: "22:00", isClosed: false },
+            tuesday: { open: "09:00", close: "22:00", isClosed: false },
+            wednesday: { open: "09:00", close: "22:00", isClosed: false },
+            thursday: { open: "09:00", close: "22:00", isClosed: false },
+            friday: { open: "09:00", close: "22:00", isClosed: false },
+            saturday: { open: "09:00", close: "22:00", isClosed: false },
+            sunday: { open: "09:00", close: "22:00", isClosed: false }
+        };
+
+        dbData.stores.forEach(store => {
+            if (!store.operatingHours) {
+                store.operatingHours = defaultHours;
+                changed = true;
+            }
+            if (store.products) {
+                store.products.forEach(p => {
+                    if (!p.dietaryType) {
+                        p.dietaryType = 'Veg';
+                        changed = true;
+                    }
+                });
+            }
+        });
 
         const now = new Date();
         dbData.stores.forEach(store => {
@@ -831,6 +879,10 @@ app.post('/api/auth/login', (req, res) => {
         console.log(`[AUTH FAIL] User with email ${emailLower} not found.`);
         return res.status(401).json({ error: 'Invalid email or password' });
     }
+    if (user.status === 'Suspended') {
+        console.log(`[AUTH FAIL] Suspended user ${emailLower} tried to log in.`);
+        return res.status(403).json({ error: 'Your account has been suspended by the platform administrator.' });
+    }
     
     const valid = bcrypt.compareSync(password, user.password);
     if (!valid) {
@@ -1010,11 +1062,51 @@ app.post('/api/auth/reset-password', (req, res) => {
     res.json({ success: true, message: 'Password has been reset successfully' });
 });
 
+function getStoreWithDynamicStatus(store) {
+    if (!store) return store;
+    const storeCopy = { ...store };
+    if (storeCopy.status === 'Pending Approval' || storeCopy.status === 'Suspended') {
+        return storeCopy;
+    }
+    if (!storeCopy.operatingHours) {
+        return storeCopy;
+    }
+    const now = new Date();
+    const dayNames = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+    const currentDay = dayNames[now.getDay()];
+    const schedule = storeCopy.operatingHours[currentDay];
+    
+    if (!schedule || schedule.isClosed) {
+        storeCopy.status = 'Closed';
+        return storeCopy;
+    }
+    
+    const [openH, openM] = schedule.open.split(':').map(Number);
+    const [closeH, closeM] = schedule.close.split(':').map(Number);
+    
+    const currentH = now.getHours();
+    const currentM = now.getMinutes();
+    
+    const openTimeMinutes = openH * 60 + openM;
+    const closeTimeMinutes = closeH * 60 + closeM;
+    const currentTimeMinutes = currentH * 60 + currentM;
+    
+    if (currentTimeMinutes >= openTimeMinutes && currentTimeMinutes < closeTimeMinutes) {
+        if (storeCopy.status !== 'Closed') {
+            storeCopy.status = 'Open';
+        }
+    } else {
+        storeCopy.status = 'Closed';
+    }
+    return storeCopy;
+}
+
 // GET: All stores
 app.get('/api/stores', (req, res) => {
     const db = readDb();
     const activeStores = db.stores.filter(s => s.status !== 'Pending Approval' && s.status !== 'Suspended');
-    res.json(activeStores);
+    const dynamicStores = activeStores.map(s => getStoreWithDynamicStatus(s));
+    res.json(dynamicStores);
 });
 
 // GET: Single store by ID
@@ -1022,21 +1114,10 @@ app.get('/api/stores/:id', (req, res) => {
     const db = readDb();
     const store = db.stores.find(s => s.id === req.params.id);
     if (!store) return res.status(404).json({ error: 'Store not found' });
-    res.json(store);
+    res.json(getStoreWithDynamicStatus(store));
 });
 
 // --- SEARCH, RECOMMENDATIONS & CATEGORIES ENDPOINTS (Phase 14) ---
-
-const defaultCategories = [
-    { id: 'dairy', name: 'Dairy & Fresh', parentId: null },
-    { id: 'milk', name: 'Fresh Milk', parentId: 'dairy' },
-    { id: 'yogurt', name: 'Yogurt & Cream', parentId: 'dairy' },
-    { id: 'cheese', name: 'Artisanal Cheese', parentId: 'dairy' },
-    { id: 'paneer', name: 'Fresh Paneer', parentId: 'cheese' },
-    { id: 'fruits', name: 'Fruits & Berries', parentId: null },
-    { id: 'bakery', name: 'Artisan Bakery', parentId: null },
-    { id: 'beverages', name: 'Beverages', parentId: null }
-];
 
 // Helper to recursively resolve nested subcategory IDs
 function getSubcategoryIds(categories, parentId) {
@@ -1401,9 +1482,27 @@ app.put('/api/stores/:id', verifyToken, verifyStoreOwner, (req, res) => {
         image: settings.image || dbData.stores[idx].image,
         status: settings.status || dbData.stores[idx].status || 'Open',
         upiVpa: settings.upiVpa || dbData.stores[idx].upiVpa || '',
-        upiName: settings.upiName || dbData.stores[idx].upiName || ''
+        upiName: settings.upiName || dbData.stores[idx].upiName || '',
+        operatingHours: settings.operatingHours || dbData.stores[idx].operatingHours
     };
     
+    writeDb(dbData);
+    broadcastSync('store_updated', req.params.id);
+    res.json(dbData.stores[idx]);
+});
+
+// PUT: Update store weekly operating hours
+app.put('/api/stores/:id/operating-hours', verifyToken, verifyStoreOwner, (req, res) => {
+    const dbData = readDb();
+    const idx = dbData.stores.findIndex(s => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Store not found.' });
+    
+    const { operatingHours } = req.body;
+    if (!operatingHours || typeof operatingHours !== 'object') {
+        return res.status(400).json({ error: 'Invalid operating hours structure.' });
+    }
+    
+    dbData.stores[idx].operatingHours = operatingHours;
     writeDb(dbData);
     broadcastSync('store_updated', req.params.id);
     res.json(dbData.stores[idx]);
@@ -1605,7 +1704,8 @@ app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) =
         desc: sanitizeInput(prodData.desc || ''),
         rating: 5.0,
         image: prodUrl || '',
-        variants: sanitizedVariants
+        variants: sanitizedVariants,
+        dietaryType: sanitizeInput(prodData.dietaryType || 'Veg')
     };
     
     dbData.stores[storeIdx].products.push(newProduct);
@@ -1668,7 +1768,8 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
         stock: updated.stock !== undefined ? parseInt(updated.stock) : dbData.stores[storeIdx].products[prodIdx].stock,
         desc: updated.desc !== undefined ? sanitizeInput(updated.desc) : dbData.stores[storeIdx].products[prodIdx].desc,
         image: updated.image || dbData.stores[storeIdx].products[prodIdx].image,
-        variants: sanitizedVariants
+        variants: sanitizedVariants,
+        dietaryType: updated.dietaryType !== undefined ? sanitizeInput(updated.dietaryType) : dbData.stores[storeIdx].products[prodIdx].dietaryType
     };
     
     writeDb(dbData);
@@ -1775,6 +1876,10 @@ app.post('/api/orders', verifyToken, (req, res) => {
         }
         if (store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended')) {
             return res.status(400).json({ error: `The store "${store.name}" has been temporarily suspended by the platform.` });
+        }
+        const evaluatedStore = getStoreWithDynamicStatus(store);
+        if (evaluatedStore.status === 'Closed') {
+            return res.status(400).json({ error: `The store "${store.name}" is currently closed and cannot accept orders.` });
         }
         storesMap[sid] = store;
     }
@@ -1923,6 +2028,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
                 discount: storeDiscount,
                 grandTotal: subGrandTotal,
                 voucherCode: sanitizeInput(orderData.voucherCode || ''),
+                deliveryInstructions: sanitizeInput(orderData.deliveryInstructions || ''),
                 customer: {
                     name: sanitizeInput(customer.name),
                     phone: sanitizeInput(customer.phone),
@@ -1983,6 +2089,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
             subOrders: childOrders,
             subOrderIds: subOrderIds,
             grandTotal: grandTotal,
+            deliveryInstructions: sanitizeInput(orderData.deliveryInstructions || ''),
             customer: customer,
             timestamp: new Date().toISOString()
         };
@@ -2018,6 +2125,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
             discount: totalDiscount,
             grandTotal: grandTotal,
             voucherCode: sanitizeInput(orderData.voucherCode || ''),
+            deliveryInstructions: sanitizeInput(orderData.deliveryInstructions || ''),
             customer: {
                 name: sanitizeInput(customer.name),
                 phone: sanitizeInput(customer.phone),
@@ -2128,9 +2236,14 @@ app.put('/api/orders/:id/status', verifyToken, verifyOrderStatusUpdater, (req, r
     const idx = dbData.orders.findIndex(o => o.id === req.params.id);
     if (idx === -1) return res.status(404).json({ error: 'Order not found' });
     
-    const { status, description, prepTimeMinutes, deliveryStaff } = req.body;
+    const { status, description, prepTimeMinutes, deliveryStaff, reason, cancelledBy } = req.body;
     const oldStatus = dbData.orders[idx].status;
     dbData.orders[idx].status = status;
+    
+    if (status === 'Cancelled') {
+        dbData.orders[idx].cancelledBy = cancelledBy || req.user.role;
+        dbData.orders[idx].cancellationReason = reason || 'No reason specified';
+    }
     
     if (status === 'Preparing') {
         dbData.orders[idx].prepTimeMinutes = parseInt(prepTimeMinutes) || 15;
@@ -2150,7 +2263,7 @@ app.put('/api/orders/:id/status', verifyToken, verifyOrderStatusUpdater, (req, r
     dbData.orders[idx].statusTimeline.push({
         status,
         time: new Date().toISOString(),
-        desc: description || (status === 'Cancelled' ? 'Order cancelled by customer during grace window.' : 'Order status updated')
+        desc: description || (status === 'Cancelled' ? `Order cancelled by ${cancelledBy || req.user.role}. Reason: ${reason || 'No reason specified'}` : 'Order status updated')
     });
     
     processReferralRewardIfApplicable(dbData.orders[idx], dbData);
@@ -2870,6 +2983,210 @@ app.post('/api/admin/config', verifyToken, verifyAdmin, (req, res) => {
     
     writeDb(dbData);
     res.json(dbData.config);
+});
+
+// --- GAP API EXTENSIONS ---
+
+// POST: Broadcast SSE system notification
+app.post('/api/admin/broadcast', verifyToken, verifyAdmin, (req, res) => {
+    const { message } = req.body;
+    if (!message) return res.status(400).json({ error: 'Message content is required' });
+    
+    broadcastSync('sys_notification', { type: 'broadcast', message });
+    res.json({ success: true, message });
+});
+
+// Category Management CRUD
+app.post('/api/admin/categories', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    if (!dbData.categories) dbData.categories = JSON.parse(JSON.stringify(defaultCategories));
+    
+    const { id, name, parentId, image } = req.body;
+    if (!id || !name) {
+        return res.status(400).json({ error: 'Category ID and Name are required.' });
+    }
+    
+    const exists = dbData.categories.some(c => c.id === id);
+    if (exists) {
+        return res.status(400).json({ error: `Category with ID "${id}" already exists.` });
+    }
+    
+    const newCat = { id, name, parentId: parentId || null, image: image || '' };
+    dbData.categories.push(newCat);
+    writeDb(dbData);
+    res.status(201).json(newCat);
+});
+
+app.put('/api/admin/categories/:id', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    if (!dbData.categories) dbData.categories = JSON.parse(JSON.stringify(defaultCategories));
+    
+    const catIdx = dbData.categories.findIndex(c => c.id === req.params.id);
+    if (catIdx === -1) return res.status(404).json({ error: 'Category not found.' });
+    
+    const { name, parentId, image } = req.body;
+    if (name === '') return res.status(400).json({ error: 'Category Name cannot be empty.' });
+    
+    dbData.categories[catIdx] = {
+        ...dbData.categories[catIdx],
+        name: name || dbData.categories[catIdx].name,
+        parentId: parentId !== undefined ? parentId : dbData.categories[catIdx].parentId,
+        image: image !== undefined ? image : dbData.categories[catIdx].image
+    };
+    
+    writeDb(dbData);
+    res.json(dbData.categories[catIdx]);
+});
+
+app.delete('/api/admin/categories/:id', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    if (!dbData.categories) dbData.categories = JSON.parse(JSON.stringify(defaultCategories));
+    
+    const catId = req.params.id;
+    const catIdx = dbData.categories.findIndex(c => c.id === catId);
+    if (catIdx === -1) return res.status(404).json({ error: 'Category not found.' });
+    
+    const subIds = getSubcategoryIds(dbData.categories, catId);
+    
+    dbData.categories = dbData.categories.filter(c => !subIds.includes(c.id));
+    
+    dbData.stores.forEach(s => {
+        if (s.products) {
+            s.products.forEach(p => {
+                if (subIds.includes(p.category)) {
+                    p.category = 'uncategorized';
+                }
+            });
+        }
+    });
+    
+    writeDb(dbData);
+    res.json({ success: true, deletedIds: subIds });
+});
+
+// Customer Account Suspension Management
+app.get('/api/admin/users', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    const sanitized = dbData.users.map(u => {
+        const { password, ...rest } = u;
+        return { ...rest, status: u.status || 'Active' };
+    });
+    res.json(sanitized);
+});
+
+app.post('/api/admin/users/:id/suspend', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.params.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found.' });
+    
+    if (dbData.users[userIdx].role === 'admin') {
+        return res.status(400).json({ error: 'Platform administrators cannot be suspended.' });
+    }
+    
+    dbData.users[userIdx].status = 'Suspended';
+    writeDb(dbData);
+    res.json({ success: true, userStatus: 'Suspended' });
+});
+
+app.post('/api/admin/users/:id/reactivate', verifyToken, verifyAdmin, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.params.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found.' });
+    
+    dbData.users[userIdx].status = 'Active';
+    writeDb(dbData);
+    res.json({ success: true, userStatus: 'Active' });
+});
+
+// Post-Delivery Rider Tipping
+app.post('/api/orders/:id/tip', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const idx = dbData.orders.findIndex(o => o.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Order not found.' });
+    
+    const order = dbData.orders[idx];
+    if (order.status !== 'Delivered') {
+        return res.status(400).json({ error: 'Tipping is only allowed after successful doorstep delivery.' });
+    }
+    
+    const { amount } = req.body;
+    const tipVal = parseFloat(amount);
+    if (isNaN(tipVal) || tipVal <= 0) {
+        return res.status(400).json({ error: 'Valid tip amount is required.' });
+    }
+    
+    const customerUser = dbData.users.find(u => u.id === req.user.id);
+    if (!customerUser) return res.status(404).json({ error: 'User not found.' });
+    
+    if ((customerUser.walletBalance || 0) < tipVal) {
+        return res.status(400).json({ error: 'Insufficient wallet balance to tip rider.' });
+    }
+    
+    customerUser.walletBalance = parseFloat((customerUser.walletBalance - tipVal).toFixed(2));
+    order.riderTip = parseFloat(((order.riderTip || 0) + tipVal).toFixed(2));
+    order.grandTotal = parseFloat((order.grandTotal + tipVal).toFixed(2));
+    
+    const ledgerEntry = {
+        id: 'ledger-' + Math.floor(100000 + Math.random() * 900000),
+        orderId: order.id,
+        type: 'rider_tip',
+        debit: tipVal,
+        credit: 0.00,
+        description: `Rider tipping support allocated from customer wallet for Order #${order.id}`,
+        timestamp: new Date().toISOString()
+    };
+    if (!dbData.ledger) dbData.ledger = [];
+    dbData.ledger.push(ledgerEntry);
+    
+    writeDb(dbData);
+    broadcastSync('orders_updated', order.id);
+    res.json({ success: true, riderTip: order.riderTip, walletBalance: customerUser.walletBalance });
+});
+
+// Address Management - Make Default
+app.post('/api/users/addresses/:id/make-default', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found.' });
+    
+    const user = dbData.users[userIdx];
+    if (!user.addresses) user.addresses = [];
+    
+    const addrExists = user.addresses.some(a => a.id === req.params.id);
+    if (!addrExists) return res.status(404).json({ error: 'Address not found in saved list.' });
+    
+    user.addresses.forEach(a => {
+        a.isDefault = (a.id === req.params.id);
+    });
+    
+    writeDb(dbData);
+    res.json({ success: true, addresses: user.addresses });
+});
+
+// Bulk replace products (CSV Catalog upload endpoint)
+app.post('/api/stores/:id/products/bulk', verifyToken, verifyStoreOwner, (req, res) => {
+    const dbData = readDb();
+    const idx = dbData.stores.findIndex(s => s.id === req.params.id);
+    if (idx === -1) return res.status(404).json({ error: 'Store not found.' });
+    
+    const { products } = req.body;
+    if (!products || !Array.isArray(products)) {
+        return res.status(400).json({ error: 'Invalid products array.' });
+    }
+    
+    for (const p of products) {
+        if (!p.name || !p.category) {
+            return res.status(400).json({ error: 'Product name and category are required.' });
+        }
+        if (typeof p.price !== 'number' || p.price < 0) {
+            return res.status(400).json({ error: `Invalid price for product "${p.name}".` });
+        }
+    }
+    
+    dbData.stores[idx].products = products;
+    writeDb(dbData);
+    broadcastSync('catalog_changed', req.params.id);
+    res.json({ success: true, count: products.length, products });
 });
 
 // --- SOCKETS, QUEUES & PAYMENTS IMPLEMENTATION (Phase 15) ---

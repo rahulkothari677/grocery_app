@@ -245,13 +245,29 @@
 
                     <!-- View Pane 2: Inventory Manager Table -->
                     <div id="owner-pane-inventory" class="owner-panel-pane" style="display: none;">
+                        <!-- Low Stock Warnings Panel -->
+                        <div class="glass-panel" id="low-stock-warning-panel" style="margin-bottom: 20px; padding: 20px; border: 1.5px solid rgba(239, 68, 68, 0.3); display: none;">
+                            <h3 style="color: #ef4444; font-size: 1.1rem; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+                                <i class="fa-solid fa-triangle-exclamation"></i> Low Stock Warning (Stock &lt;= 5)
+                            </h3>
+                            <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 12px;">The following items are running low. Update their stock immediately below.</p>
+                            <div id="low-stock-list" style="display: flex; flex-direction: column; gap: 10px;">
+                                <!-- Rendered dynamically -->
+                            </div>
+                        </div>
+
                         <div class="glass-panel inventory-table-container">
                             <div class="inventory-header-row">
                                 <div>
                                     <h2>Inventory Catalog</h2>
                                     <p>Add and edit items listed in your public menu storefront</p>
                                 </div>
-                                <button class="btn-premium" id="btn-open-add-product-modal"><i class="fa-solid fa-plus"></i> Add New Product</button>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <button type="button" class="btn-outline" id="btn-export-csv" style="padding: 8px 16px; font-size: 0.85rem; border-color: var(--border-color); color: var(--text-muted);"><i class="fa-solid fa-download"></i> Export CSV</button>
+                                    <button type="button" class="btn-outline" id="btn-import-csv" style="padding: 8px 16px; font-size: 0.85rem; border-color: var(--border-color); color: var(--text-muted);"><i class="fa-solid fa-upload"></i> Import CSV</button>
+                                    <input type="file" id="csv-import-file" accept=".csv" style="display: none;">
+                                    <button type="button" class="btn-premium" id="btn-open-add-product-modal"><i class="fa-solid fa-plus"></i> Add New Product</button>
+                                </div>
                             </div>
 
                             <div style="overflow-x: auto;">
@@ -320,9 +336,29 @@
                                     <div class="form-group" style="flex: 1; margin: 0;">
                                         <label for="settings-store-upi-name">UPI Payee / Business Name</label>
                                         <input type="text" id="settings-store-upi-name" class="glass-input" placeholder="E.g., GreenValley Dairy Boutique" required>
+                                </div>
+                                
+                                <div class="form-group" style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
+                                    <label style="font-size: 1.1rem; font-weight: 700; color: var(--text-main); margin-bottom: 10px; display: block;"><i class="fa-solid fa-clock" style="color: var(--secondary); margin-right: 8px;"></i> Weekly Operating Hours</label>
+                                    <p style="color: var(--text-muted); font-size: 0.8rem; margin-bottom: 15px;">Specify your store's daily opening/closing schedules. Orders will be automatically disabled outside these hours.</p>
+                                    <div class="glass-card" style="padding: 0; overflow: hidden; border: 1px solid var(--border-color); border-radius: 10px;">
+                                        <table class="inventory-table" style="width: 100%; margin: 0; border: none; font-size: 0.85rem;">
+                                            <thead>
+                                                <tr>
+                                                    <th style="padding: 10px 15px;">Day</th>
+                                                    <th style="padding: 10px 15px;">Open Time</th>
+                                                    <th style="padding: 10px 15px;">Close Time</th>
+                                                    <th style="padding: 10px 15px; text-align: center;">Closed?</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody id="operating-hours-table-body">
+                                                <!-- Javascript will populate days Monday-Sunday -->
+                                            </tbody>
+                                        </table>
                                     </div>
                                 </div>
-                                <button type="submit" class="btn-premium" style="margin-top: 10px;">Save Profile Configuration</button>
+
+                                <button type="submit" class="btn-premium" style="margin-top: 20px;">Save Profile Configuration</button>
                             </form>
 
                             <!-- Delivery Staff Management Section -->
@@ -834,6 +870,38 @@
                 </div>
                 
                 <button type="submit" id="btn-confirm-substitute" class="btn-premium" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--secondary) 0%, #3b82f6 100%); border-color: var(--secondary);">Send Swap Suggestion</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Decline Order Modal -->
+    <div class="modal-overlay" id="modal-decline-order" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 500px; padding: 32px; position: relative;">
+            <button type="button" class="modal-close" id="btn-close-decline-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <i class="fa-solid fa-xmark" style="font-size: 1.2rem;"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.5rem; color: var(--danger); margin-bottom: 12px;"><i class="fa-solid fa-circle-xmark"></i></div>
+                <h3 style="font-size: 1.3rem; font-weight: 700; color: var(--text-main);">Decline Order</h3>
+                <p style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Please select a reason for declining this order. The customer will be refunded automatically.</p>
+            </div>
+            
+            <form id="form-decline-order" class="checkout-form">
+                <input type="hidden" id="decline-order-id">
+                
+                <div class="form-group" style="margin-bottom: 20px;">
+                    <label for="decline-select-reason" style="font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; display: block;">Reason for Rejection</label>
+                    <select id="decline-select-reason" class="glass-input" required style="width: 100%;">
+                        <option value="Items Out of Stock">Store is out of stock</option>
+                        <option value="Store Closing Soon">Store is closing soon</option>
+                        <option value="Too Busy / High Order Volume">High order volume / Kitchen busy</option>
+                        <option value="Rider Unavailable">Delivery rider unavailable</option>
+                        <option value="Incorrect Pricing">Incorrect item pricing</option>
+                        <option value="Outside Delivery Range">Delivery address is outside range</option>
+                    </select>
+                </div>
+                
+                <button type="submit" id="btn-confirm-decline" class="btn-premium" style="width: 100%; padding: 12px; background: linear-gradient(135deg, var(--danger) 0%, #ef4444 100%); border-color: var(--danger);">Decline & Cancel Order</button>
             </form>
         </div>
     </div>

@@ -189,13 +189,17 @@ async function runTest() {
     // --- TEST E: SPLIT PAYMENT CHECKOUT ---
     console.log("\n--- TEST E: Split Payment checkout ---");
     // Set wallet balance to ₹150 for clean testing
+    const fs = require('fs');
+    const path = require('path');
+    const dbPath = path.join(__dirname, 'backend', 'db.json');
+    const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+    const uIdx = dbData.users.findIndex(u => u.email === 'rahul@luxe.com');
+    if (uIdx !== -1) {
+        dbData.users[uIdx].walletBalance = 150.00;
+        fs.writeFileSync(dbPath, JSON.stringify(dbData, null, 2));
+    }
     const currentBal = await getWalletBalance();
-    // To set to exactly 150, we can add/deduct, or just make an order of size currentBal - 150.
-    // Let's deduct:
-    const resMe = await fetch(`${BASE_URL}/auth/me`, { headers: { 'Authorization': `Bearer ${customerToken}` } });
-    const meData = await resMe.json();
-    console.log(`Clearing wallet balance by placing dummy order...`);
-    // Or we can just mock it by making order size larger than wallet balance and requesting a split.
+    balance = currentBal;
     // Let's place a split order:
     // User wallet balance is around ₹1500. Let's make an order of ₹2000.
     // subtotal = ₹1920 (8 * 240). Delivery fee = 0. Grand total = ₹1920.

@@ -94,6 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let activeAccountTab = 'profile';
     let appliedVoucher = null;
     let filterOpenOnly = false;
+    let filterVegOnly = false;
     let storeSortBy = 'distance';
     let checkoutCustomerData = null;
     let checkoutDiscount = 0;
@@ -350,6 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
         favoritesCarouselContainer: document.getElementById('favorites-carousel-container'),
         favoritesCarouselList: document.getElementById('favorites-carousel-list'),
         btnFilterOpenOnly: document.getElementById('btn-filter-open-only'),
+        btnFilterVegOnly: document.getElementById('btn-filter-veg-only'),
+        searchFilterVegOnly: document.getElementById('search-filter-veg-only'),
         selectStoreSort: document.getElementById('select-store-sort'),
         modalStoreReview: document.getElementById('modal-store-review'),
         btnCloseReviewModal: document.getElementById('btn-close-review-modal'),
@@ -496,9 +499,16 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.background = 'rgba(255,255,255,0.02)';
             
             const emoji = addr.tag === 'Home' ? '🏠' : (addr.tag === 'Work' ? '💼' : '📍');
+            const defaultBadge = addr.isDefault 
+                ? `<span style="background: rgba(16,185,129,0.15); color: #10b981; font-size: 0.7rem; font-weight: bold; padding: 2px 8px; border-radius: 12px; margin-left: 8px; border: 1px solid #10b981;">Default</span>`
+                : `<button class="btn-outline make-default-btn" data-id="${addr.id}" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; cursor: pointer; height: auto;">Make Default</button>`;
+            
             card.innerHTML = `
                 <div style="flex-grow: 1; text-align: left;">
-                    <strong style="font-size: 0.9rem; color: var(--primary);">${emoji} ${addr.tag}</strong>
+                    <div style="display: flex; align-items: center;">
+                        <strong style="font-size: 0.9rem; color: var(--primary);">${emoji} ${addr.tag}</strong>
+                        ${defaultBadge}
+                    </div>
                     <p style="font-size: 0.8rem; color: var(--text-main); margin-top: 4px; line-height: 1.3;">${addr.address}</p>
                     <span style="font-size: 0.7rem; color: var(--text-muted);">Coords: ${addr.lat.toFixed(4)}, ${addr.lng.toFixed(4)}</span>
                 </div>
@@ -506,6 +516,20 @@ document.addEventListener('DOMContentLoaded', () => {
                     <i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i>
                 </button>
             `;
+
+            const makeDefaultBtn = card.querySelector('.make-default-btn');
+            if (makeDefaultBtn) {
+                makeDefaultBtn.addEventListener('click', async () => {
+                    const ok = await db.makeAddressDefault(addr.id);
+                    if (ok) {
+                        showToast("Default address updated!");
+                        await renderAddresses();
+                        await populateCheckoutAddressSelect();
+                    } else {
+                        showToast("Failed to update default address.", "error");
+                    }
+                });
+            }
 
             card.querySelector('.delete-addr-btn').addEventListener('click', async () => {
                 if (confirm(`Delete saved address "${addr.tag}"?`)) {
@@ -549,11 +573,23 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateStr = new Date(order.timestamp).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
             
             const reorderBtnId = `reorder-${order.id}`;
+            const tipBtnId = `tip-rider-${order.id}`;
+            const invoiceBtnId = `invoice-${order.id}`;
+            
+            const isDelivered = order.status === 'Delivered';
+            const tipBtnHtml = isDelivered 
+                ? `<button class="btn-premium btn-tip-rider" id="${tipBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px; background: var(--secondary); border-color: var(--secondary); margin-right: 8px;"><i class="fa-solid fa-hand-holding-dollar"></i> Tip Rider</button>`
+                : '';
+            const invoiceBtnHtml = `<button class="btn-outline btn-view-invoice" id="${invoiceBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px; margin-right: 8px;"><i class="fa-solid fa-receipt"></i> Invoice</button>`;
+            
             const discountHtml = order.discount && order.discount > 0
                 ? `<div style="font-size: 0.75rem; color: var(--secondary); margin-top: 4px; text-align: left;">Voucher Discount: -₹${order.discount.toFixed(2)}</div>`
                 : '';
             const utrHtml = order.customer && order.customer.payment === 'upi' && order.customer.transactionId
                 ? `<div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px; text-align: left;">UPI Ref: <span style="font-family: monospace; font-weight: bold;">${order.customer.transactionId}</span></div>`
+                : '';
+            const riderTipHtml = order.riderTip && order.riderTip > 0
+                ? `<div style="font-size: 0.75rem; color: var(--primary); margin-top: 4px; text-align: left;">Rider Tip: ₹${order.riderTip.toFixed(2)}</div>`
                 : '';
             
             card.innerHTML = `
@@ -569,13 +605,28 @@ document.addEventListener('DOMContentLoaded', () => {
                 </div>
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <div style="text-align: left;">
-                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">₹${(order.subtotal + order.deliveryFee - (order.discount || 0)).toFixed(2)}</span>
+                        <span style="font-size: 0.85rem; font-weight: 700; color: var(--text-main);">₹${(order.subtotal + order.deliveryFee + (order.riderTip || 0) - (order.discount || 0)).toFixed(2)}</span>
                         ${discountHtml}
                         ${utrHtml}
+                        ${riderTipHtml}
                     </div>
-                    <button class="btn-premium btn-reorder" id="${reorderBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px;"><i class="fa-solid fa-rotate-left"></i> Reorder</button>
+                    <div style="display: flex;">
+                        ${invoiceBtnHtml}
+                        ${tipBtnHtml}
+                        <button class="btn-premium btn-reorder" id="${reorderBtnId}" style="font-size: 0.75rem; padding: 6px 12px; border-radius: 6px;"><i class="fa-solid fa-rotate-left"></i> Reorder</button>
+                    </div>
                 </div>
             `;
+            
+            card.querySelector('.btn-view-invoice').addEventListener('click', () => {
+                openInvoiceModal(order);
+            });
+            
+            if (isDelivered) {
+                card.querySelector('.btn-tip-rider').addEventListener('click', () => {
+                    openTipRiderModal(order.id);
+                });
+            }
 
             card.querySelector('.btn-reorder').addEventListener('click', async () => {
                 let success = false;
@@ -668,12 +719,28 @@ document.addEventListener('DOMContentLoaded', () => {
         defaultOption.innerText = '-- Choose a Saved Address or type below --';
         elements.checkoutAddressSelect.appendChild(defaultOption);
 
+        let defaultAddrVal = null;
         addresses.forEach(addr => {
             const opt = document.createElement('option');
-            opt.value = JSON.stringify({ address: addr.address, lat: addr.lat, lng: addr.lng });
-            opt.innerText = `${addr.tag}: ${addr.address}`;
+            const valStr = JSON.stringify({ address: addr.address, lat: addr.lat, lng: addr.lng });
+            opt.value = valStr;
+            opt.innerText = `${addr.tag}: ${addr.address}${addr.isDefault ? ' (Default)' : ''}`;
+            if (addr.isDefault) {
+                opt.selected = true;
+                defaultAddrVal = valStr;
+            }
             elements.checkoutAddressSelect.appendChild(opt);
         });
+
+        if (defaultAddrVal) {
+            elements.checkoutAddressSelect.value = defaultAddrVal;
+            const parsed = JSON.parse(defaultAddrVal);
+            elements.checkoutAddress.value = parsed.address;
+            if (cart.length > 0) {
+                cart[0].storeDistance = db.calculateDistance(parsed.lat, parsed.lng, activeStore ? activeStore.lat : parsed.lat, activeStore ? activeStore.lng : parsed.lng);
+                renderCheckoutSummary();
+            }
+        }
     }
 
     async function updateActiveOrderButtonVisibility() {
@@ -1093,6 +1160,11 @@ document.addEventListener('DOMContentLoaded', () => {
             stores = stores.filter(s => s.status !== 'Closed');
         }
 
+        // Filter by Veg only
+        if (filterVegOnly) {
+            stores = stores.filter(s => s.products && s.products.some(p => p.dietaryType === 'Veg'));
+        }
+
         // 2. Sort stores
         if (storeSortBy === 'rating') {
             stores.sort((a, b) => b.rating - a.rating);
@@ -1187,7 +1259,11 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.distanceSliderValue.innerText = `${maxDist} km`;
 
         const sortBy = document.querySelector('input[name="search-sort"]:checked').value;
+        const vegOnlyChecked = elements.searchFilterVegOnly && elements.searchFilterVegOnly.checked;
         let filtered = matches.filter(match => match.store.distance <= maxDist);
+        if (vegOnlyChecked) {
+            filtered = filtered.filter(match => match.product.dietaryType === 'Veg');
+        }
 
         if (sortBy === 'price-asc') {
             filtered.sort((a, b) => a.product.price - b.product.price);
@@ -1221,6 +1297,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<span class="product-badge-promo">${match.product.badgeText}</span>` 
                 : '';
 
+            let dietaryHtml = '';
+            if (match.product.dietaryType === 'Veg') {
+                dietaryHtml = `<span class="dietary-badge veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
+            } else if (match.product.dietaryType === 'Non-Veg') {
+                dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
+            }
+
             const priceHtml = match.product.originalPrice 
                 ? `<span class="product-price-slashed">₹${match.product.originalPrice.toFixed(2)}</span>₹${match.product.price.toFixed(2)}` 
                 : `₹${match.product.price.toFixed(2)}`;
@@ -1238,6 +1321,7 @@ document.addEventListener('DOMContentLoaded', () => {
             
             card.innerHTML = `
                 ${badgeHtml}
+                ${dietaryHtml}
                 <div class="compare-emoji">${visualContent}</div>
                 <div class="compare-info">
                     <h3>${match.product.name}</h3>
@@ -1409,6 +1493,9 @@ document.addEventListener('DOMContentLoaded', () => {
         if (searchVal) {
             products = products.filter(p => p.name.toLowerCase().includes(searchVal) || p.desc.toLowerCase().includes(searchVal));
         }
+        if (filterVegOnly) {
+            products = products.filter(p => p.dietaryType === 'Veg');
+        }
 
         if (products.length === 0) {
             elements.storeProductsContainer.innerHTML = `
@@ -1435,6 +1522,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<span class="product-badge-promo">${prod.badgeText}</span>` 
                 : '';
 
+            let dietaryHtml = '';
+            if (prod.dietaryType === 'Veg') {
+                dietaryHtml = `<span class="dietary-badge veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
+            } else if (prod.dietaryType === 'Non-Veg') {
+                dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
+            }
+
             const priceHtml = prod.originalPrice 
                 ? `<span class="product-price-slashed">₹${prod.originalPrice.toFixed(2)}</span>₹${prod.price.toFixed(2)}` 
                 : `₹${prod.price.toFixed(2)}`;
@@ -1455,6 +1549,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             card.innerHTML = `
                 ${badgeHtml}
+                ${dietaryHtml}
                 <div class="product-card-top">
                     <div class="product-emoji-container">${visualContent}</div>
                     <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}" id="stock-tag-${prod.id}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
@@ -2154,7 +2249,8 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.modalUpiPayment.style.display = 'flex';
             elements.modalUpiPayment.classList.add('active');
         } else {
-            const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '');
+            const deliveryInstructions = document.getElementById('checkout-instructions') ? document.getElementById('checkout-instructions').value.trim() : '';
+            const order = await db.createOrder(storeId, cart, customer, discount, appliedVoucher ? appliedVoucher.code : '', deliveryInstructions);
             if (order) {
                 cart = [];
                 appliedVoucher = null;
@@ -2692,7 +2788,16 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             }
             if (event === 'sys_notification') {
-                showSimulatedNotification(data.message);
+                if (data && data.type === 'broadcast') {
+                    const alertBar = document.getElementById('broadcast-alert-bar');
+                    const alertText = document.getElementById('broadcast-alert-text');
+                    if (alertBar && alertText) {
+                        alertText.innerText = data.message;
+                        alertBar.style.display = 'flex';
+                    }
+                } else {
+                    showSimulatedNotification(data.message || data);
+                }
             }
         } catch (err) {
             console.error("Error parsing SSE message:", err);
@@ -3118,7 +3223,8 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.btnSubmitUpiTransaction.disabled = true;
         elements.btnSubmitUpiTransaction.innerText = "Confirming Settlement...";
         
-        const order = await db.createOrder(storeId, cart, checkoutCustomerData, checkoutDiscount, appliedVoucher ? appliedVoucher.code : '');
+        const deliveryInstructions = document.getElementById('checkout-instructions') ? document.getElementById('checkout-instructions').value.trim() : '';
+        const order = await db.createOrder(storeId, cart, checkoutCustomerData, checkoutDiscount, appliedVoucher ? appliedVoucher.code : '', deliveryInstructions);
         
         elements.btnSubmitUpiTransaction.disabled = false;
         elements.btnSubmitUpiTransaction.innerText = "Confirm & Submit Order";
@@ -3145,18 +3251,13 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     });
 
-    // Cancel order button click
-    elements.btnCancelOrder.addEventListener('click', async () => {
+    elements.btnCancelOrder.addEventListener('click', () => {
         if (trackingOrder) {
-            if (cancelGraceTimer) clearInterval(cancelGraceTimer);
-            
-            // Mark as cancelled in local DB
-            await db.updateOrderStatus(trackingOrder.id, 'Cancelled', 'Order cancelled by customer during grace window.');
-            showToast("Your order has been cancelled successfully.", "info");
-            
-            trackingOrder = null;
-            await switchView('landing');
-            await updateActiveOrderButtonVisibility();
+            const cancelModal = document.getElementById('modal-cancel-reason');
+            if (cancelModal) {
+                cancelModal.style.display = 'flex';
+                cancelModal.classList.add('active');
+            }
         }
     });
 
@@ -3654,6 +3755,314 @@ document.addEventListener('DOMContentLoaded', () => {
                 showSlide(nextIdx);
             }, 5000);
         }
+    }
+
+    // --- Basic Gaps Features Setup & Event Handlers ---
+
+    // 1. Delivery Instructions instruction chips click handler
+    document.querySelectorAll('.inst-chip').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const txt = btn.getAttribute('data-text');
+            const textarea = document.getElementById('checkout-instructions');
+            if (textarea) {
+                const currentVal = textarea.value.trim();
+                if (currentVal) {
+                    textarea.value = currentVal + ', ' + txt;
+                } else {
+                    textarea.value = txt;
+                }
+            }
+        });
+    });
+
+    // 2. Veg Only filter toggle button on landing page
+    if (elements.btnFilterVegOnly) {
+        elements.btnFilterVegOnly.addEventListener('click', () => {
+            filterVegOnly = !filterVegOnly;
+            if (filterVegOnly) {
+                elements.btnFilterVegOnly.style.background = 'var(--primary)';
+                elements.btnFilterVegOnly.style.borderColor = 'var(--primary)';
+                elements.btnFilterVegOnly.style.color = 'white';
+            } else {
+                elements.btnFilterVegOnly.style.background = 'transparent';
+                elements.btnFilterVegOnly.style.borderColor = '';
+                elements.btnFilterVegOnly.style.color = '';
+            }
+            renderStores();
+        });
+    }
+
+    // 3. Veg Only checkbox filter in search comparison results
+    if (elements.searchFilterVegOnly) {
+        elements.searchFilterVegOnly.addEventListener('change', async () => {
+            const q = elements.globalSearchInput.value || "Milk";
+            const matches = await db.searchProductsGlobally(q);
+            renderSearchResults(matches);
+        });
+    }
+
+    // 4. Cancellation feedback reasons select & modal forms
+    const formCancelOrder = document.getElementById('form-cancel-order');
+    const selectCancelReason = document.getElementById('cancel-reason-select');
+    const inputCancelOther = document.getElementById('cancel-reason-other');
+    const divCancelOtherGroup = document.getElementById('cancel-reason-other-group');
+    const btnCloseCancelModal = document.getElementById('btn-close-cancel-modal');
+
+    if (selectCancelReason) {
+        selectCancelReason.addEventListener('change', () => {
+            if (selectCancelReason.value === 'Other') {
+                if (divCancelOtherGroup) divCancelOtherGroup.style.display = 'block';
+                if (inputCancelOther) inputCancelOther.required = true;
+            } else {
+                if (divCancelOtherGroup) divCancelOtherGroup.style.display = 'none';
+                if (inputCancelOther) inputCancelOther.required = false;
+            }
+        });
+    }
+
+    if (btnCloseCancelModal) {
+        btnCloseCancelModal.addEventListener('click', () => {
+            const cancelModal = document.getElementById('modal-cancel-reason');
+            if (cancelModal) {
+                cancelModal.style.display = 'none';
+                cancelModal.classList.remove('active');
+            }
+        });
+    }
+
+    if (formCancelOrder) {
+        formCancelOrder.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (!trackingOrder) return;
+            
+            let reason = selectCancelReason.value;
+            if (reason === 'Other' && inputCancelOther) {
+                reason = inputCancelOther.value.trim() || 'Other';
+            }
+            
+            if (cancelGraceTimer) clearInterval(cancelGraceTimer);
+            
+            const ok = await db.updateOrderStatus(trackingOrder.id, 'Cancelled', reason);
+            if (ok) {
+                showToast("Your order has been cancelled successfully.", "info");
+            } else {
+                showToast("Failed to cancel order.", "error");
+            }
+            
+            const cancelModal = document.getElementById('modal-cancel-reason');
+            if (cancelModal) {
+                cancelModal.style.display = 'none';
+                cancelModal.classList.remove('active');
+            }
+            
+            trackingOrder = null;
+            await switchView('landing');
+            await updateActiveOrderButtonVisibility();
+        });
+    }
+
+    // 5. Post-delivery tipping rider modal wiring
+    let activeTipOrderId = null;
+    let selectedPostTipAmount = 0;
+
+    function openTipRiderModal(orderId) {
+        activeTipOrderId = orderId;
+        selectedPostTipAmount = 0;
+        
+        const modal = document.getElementById('modal-tip-rider');
+        const customInput = document.getElementById('post-tip-custom');
+        if (customInput) customInput.value = '';
+        
+        document.querySelectorAll('.post-tip-btn').forEach(btn => btn.classList.remove('active'));
+        
+        if (modal) {
+            modal.style.display = 'flex';
+            modal.classList.add('active');
+        }
+    }
+
+    document.querySelectorAll('.post-tip-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            document.querySelectorAll('.post-tip-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            selectedPostTipAmount = parseInt(btn.getAttribute('data-tip')) || 0;
+            const customInput = document.getElementById('post-tip-custom');
+            if (customInput) customInput.value = '';
+        });
+    });
+
+    const customTipInput = document.getElementById('post-tip-custom');
+    if (customTipInput) {
+        customTipInput.addEventListener('input', () => {
+            document.querySelectorAll('.post-tip-btn').forEach(b => b.classList.remove('active'));
+            selectedPostTipAmount = parseInt(customTipInput.value) || 0;
+        });
+    }
+
+    const btnCloseTipModal = document.getElementById('btn-close-tip-modal');
+    if (btnCloseTipModal) {
+        btnCloseTipModal.addEventListener('click', () => {
+            const modal = document.getElementById('modal-tip-rider');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('active');
+            }
+        });
+    }
+
+    const btnSubmitTip = document.getElementById('btn-submit-tip');
+    if (btnSubmitTip) {
+        btnSubmitTip.addEventListener('click', async () => {
+            if (!activeTipOrderId || selectedPostTipAmount <= 0) {
+                showToast("Please select or enter a valid tip amount.", "error");
+                return;
+            }
+            
+            try {
+                const res = await fetch(`http://localhost:5000/api/orders/${activeTipOrderId}/tip`, {
+                    method: 'POST',
+                    headers: db.getHeaders(),
+                    body: JSON.stringify({ tip: selectedPostTipAmount })
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    showToast(`Thank you! ₹${selectedPostTipAmount} tip credited to rider wallet.`, "success");
+                    const modal = document.getElementById('modal-tip-rider');
+                    if (modal) {
+                        modal.style.display = 'none';
+                        modal.classList.remove('active');
+                    }
+                    await renderOrderHistory();
+                } else {
+                    showToast(data.error || "Failed to submit tip.", "error");
+                }
+            } catch (err) {
+                console.error("Error submitting tip:", err);
+                showToast("Network connection error.", "error");
+            }
+        });
+    }
+
+    // 6. Tax Invoice printing and breakdown modal wiring
+    function openInvoiceModal(order) {
+        const modal = document.getElementById('modal-invoice');
+        if (!modal) return;
+        
+        document.getElementById('invoice-store-details').innerText = order.storeName;
+        document.getElementById('invoice-id-date').innerHTML = `Order: #${order.id}<br>Date: ${new Date(order.timestamp).toLocaleDateString()}`;
+        
+        let custDetails = `Name: ${order.customer.name}<br>Phone: ${order.customer.phone || 'N/A'}<br>Address: ${order.customer.address}`;
+        if (order.customer.payment) {
+            custDetails += `<br>Payment: ${order.customer.payment.toUpperCase()}`;
+        }
+        document.getElementById('invoice-customer-details').innerHTML = custDetails;
+        
+        const itemsBody = document.getElementById('invoice-items-body');
+        itemsBody.innerHTML = '';
+        
+        order.items.forEach(item => {
+            const tr = document.createElement('tr');
+            tr.style.borderBottom = '1px solid rgba(255,255,255,0.05)';
+            tr.innerHTML = `
+                <td style="padding: 8px 0; text-align: left;">${item.name}</td>
+                <td style="padding: 8px 0; text-align: center;">${item.quantity}</td>
+                <td style="padding: 8px 0; text-align: right;">₹${item.price.toFixed(2)}</td>
+                <td style="padding: 8px 0; text-align: right;">₹${(item.price * item.quantity).toFixed(2)}</td>
+            `;
+            itemsBody.appendChild(tr);
+        });
+        
+        const subtotal = order.subtotal;
+        const cgst = subtotal * 0.025;
+        const sgst = subtotal * 0.025;
+        
+        document.getElementById('invoice-subtotal').innerText = `₹${subtotal.toFixed(2)}`;
+        document.getElementById('invoice-cgst').innerText = `₹${cgst.toFixed(2)}`;
+        document.getElementById('invoice-sgst').innerText = `₹${sgst.toFixed(2)}`;
+        document.getElementById('invoice-del-fee').innerText = `₹${order.deliveryFee.toFixed(2)}`;
+        
+        const discRow = document.getElementById('invoice-discount-row');
+        if (order.discount && order.discount > 0) {
+            discRow.style.display = 'flex';
+            document.getElementById('invoice-discount').innerText = `-₹${order.discount.toFixed(2)}`;
+        } else {
+            discRow.style.display = 'none';
+        }
+        
+        const tipRow = document.getElementById('invoice-tip-row');
+        if (order.riderTip && order.riderTip > 0) {
+            tipRow.style.display = 'flex';
+            document.getElementById('invoice-tip').innerText = `₹${order.riderTip.toFixed(2)}`;
+        } else {
+            tipRow.style.display = 'none';
+        }
+        
+        const grandTotal = subtotal + order.deliveryFee + (order.riderTip || 0) - (order.discount || 0);
+        document.getElementById('invoice-grand-total').innerText = `₹${grandTotal.toFixed(2)}`;
+        
+        modal.style.display = 'flex';
+        modal.classList.add('active');
+    }
+
+    const btnPrintInvoice = document.getElementById('btn-print-invoice');
+    if (btnPrintInvoice) {
+        btnPrintInvoice.addEventListener('click', () => {
+            const printContent = document.getElementById('invoice-print-area').innerHTML;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                <head>
+                    <title>Tax Invoice</title>
+                    <style>
+                        body { font-family: sans-serif; padding: 40px; color: #333; background: white; }
+                        h2 { color: #10b981; }
+                        table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+                        th, td { border-bottom: 1px solid #ddd; padding: 10px; text-align: left; }
+                        th { background: #f9f9f9; }
+                        .text-right { text-align: right; }
+                        .text-center { text-align: center; }
+                    </style>
+                </head>
+                <body>
+                    ${printContent}
+                    <script>
+                        window.onload = function() { window.print(); window.close(); }
+                    </script>
+                </body>
+                </html>
+            `);
+            printWindow.document.close();
+        });
+    }
+
+    const btnCloseInvoiceModal = document.getElementById('btn-close-invoice-modal');
+    if (btnCloseInvoiceModal) {
+        btnCloseInvoiceModal.addEventListener('click', () => {
+            const modal = document.getElementById('modal-invoice');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('active');
+            }
+        });
+    }
+    const btnCloseInvoice = document.getElementById('btn-close-invoice');
+    if (btnCloseInvoice) {
+        btnCloseInvoice.addEventListener('click', () => {
+            const modal = document.getElementById('modal-invoice');
+            if (modal) {
+                modal.style.display = 'none';
+                modal.classList.remove('active');
+            }
+        });
+    }
+
+    // 7. Close broadcast alert banner
+    const btnCloseBroadcast = document.getElementById('btn-close-broadcast');
+    if (btnCloseBroadcast) {
+        btnCloseBroadcast.addEventListener('click', () => {
+            const alertBar = document.getElementById('broadcast-alert-bar');
+            if (alertBar) alertBar.style.display = 'none';
+        });
     }
 
     // --- Bootstrapping ---

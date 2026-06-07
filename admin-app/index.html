@@ -77,6 +77,12 @@
                 <button class="nav-tab" data-pane="ledger">
                     <i class="fa-solid fa-book-bookmark"></i> Ledger Book
                 </button>
+                <button class="nav-tab" data-pane="categories">
+                    <i class="fa-solid fa-tags"></i> Categories
+                </button>
+                <button class="nav-tab" data-pane="customers">
+                    <i class="fa-solid fa-users-gear"></i> Customer Governance
+                </button>
                 <button class="nav-tab" data-pane="config">
                     <i class="fa-solid fa-sliders"></i> System Config
                 </button>
@@ -191,8 +197,36 @@
                 <div class="glass-panel panel-section">
                     <div class="section-title-row">
                         <h3><i class="fa-solid fa-book-bookmark"></i> Double-Entry Accounting Ledger</h3>
-                        <button id="btn-refresh-ledger" class="btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="btn-export-ledger-csv" class="btn-outline btn-sm"><i class="fa-solid fa-download"></i> Export CSV</button>
+                            <button id="btn-refresh-ledger" class="btn-outline btn-sm"><i class="fa-solid fa-rotate"></i> Refresh</button>
+                        </div>
                     </div>
+
+                    <!-- Filters row -->
+                    <div style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 20px; background: rgba(255, 255, 255, 0.02); padding: 12px 18px; border-radius: 8px; border: 1px solid var(--border-color); align-items: flex-end;">
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 120px;">
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">Start Date</label>
+                            <input type="date" id="ledger-filter-start" class="glass-input" style="padding: 6px 10px; font-size: 0.8rem; height: auto;">
+                        </div>
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 120px;">
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">End Date</label>
+                            <input type="date" id="ledger-filter-end" class="glass-input" style="padding: 6px 10px; font-size: 0.8rem; height: auto;">
+                        </div>
+                        <div class="form-group" style="margin: 0; flex: 1; min-width: 150px;">
+                            <label style="font-size: 0.75rem; margin-bottom: 4px;">Account / Transaction Type</label>
+                            <select id="ledger-filter-type" class="glass-input" style="padding: 6px 10px; font-size: 0.8rem; height: auto;">
+                                <option value="">All Transactions</option>
+                                <option value="wallet_deposit">Wallet Deposit</option>
+                                <option value="wallet_refund">Wallet Refund</option>
+                                <option value="order_payment">Order Payment</option>
+                                <option value="merchant_payout">Merchant Payout</option>
+                                <option value="rider_tip">Rider Tip</option>
+                            </select>
+                        </div>
+                        <button id="btn-apply-ledger-filters" class="btn-premium" style="padding: 7px 15px; font-size: 0.8rem; margin: 0;"><i class="fa-solid fa-filter"></i> Apply Filters</button>
+                    </div>
+
                     <div class="table-container">
                         <table class="premium-table">
                             <thead>
@@ -254,6 +288,23 @@
                         </button>
                     </form>
                 </div>
+
+                <!-- System Broadcast Section -->
+                <div class="glass-panel panel-section" style="margin-top: 24px;">
+                    <h3><i class="fa-solid fa-bullhorn" style="color: var(--accent);"></i> Real-Time SSE System Broadcast</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">
+                        Broadcast high-priority alerts to all currently active customer, merchant, and delivery browser sessions instantly via Server-Sent Events (SSE).
+                    </p>
+                    <form id="broadcast-form" style="display: flex; flex-direction: column; gap: 15px; max-width: 600px;">
+                        <div class="form-group">
+                            <label for="broadcast-message">Alert Notification Message</label>
+                            <textarea id="broadcast-message" class="glass-input" rows="3" placeholder="e.g. Schedule Maintenance: LuxeGrocer checkout will be offline tonight from 2 AM to 3 AM IST." required></textarea>
+                        </div>
+                        <button type="submit" class="btn-premium" style="align-self: flex-start; padding: 10px 20px;">
+                            <i class="fa-solid fa-paper-plane"></i> Send Live Broadcast
+                        </button>
+                    </form>
+                </div>
             </div>
 
             <!-- Banners Manager Pane -->
@@ -285,6 +336,89 @@
                     <h4 style="margin-bottom: 15px;">Active Promotional Banners</h4>
                     <div id="admin-banner-list" class="table-container" style="max-width: 800px;">
                         <!-- List loaded dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Categories Pane -->
+            <div id="pane-categories" class="pane">
+                <div class="glass-panel panel-section">
+                    <h3 style="margin-bottom: 15px;"><i class="fa-solid fa-tags"></i> Dynamic Category Manager</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Create, edit, and delete grocery hierarchy categories.</p>
+                    
+                    <form id="category-form" style="display: flex; flex-wrap: wrap; gap: 15px; margin-bottom: 30px; background: rgba(255, 255, 255, 0.01); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color);">
+                        <input type="hidden" id="category-edit-id">
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label for="category-id">Category Key ID</label>
+                            <input type="text" id="category-id" class="glass-input" placeholder="e.g. bakery" required>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 200px;">
+                            <label for="category-name">Category Name</label>
+                            <input type="text" id="category-name" class="glass-input" placeholder="e.g. Bakery & Bread" required>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 100px;">
+                            <label for="category-icon">Emoji Icon</label>
+                            <input type="text" id="category-icon" class="glass-input" placeholder="e.g. 🍞" required>
+                        </div>
+                        <div class="form-group" style="flex: 1; min-width: 150px;">
+                            <label for="category-parent">Parent Category (Optional)</label>
+                            <select id="category-parent" class="glass-input">
+                                <option value="">None (Top Level)</option>
+                            </select>
+                        </div>
+                        <div class="form-group" style="flex: 2; min-width: 250px;">
+                            <label for="category-image">Category Banner Image URL</label>
+                            <input type="text" id="category-image" class="glass-input" placeholder="e.g. assets/category_bakery.png" required>
+                        </div>
+                        <div style="flex: 100%; display: flex; gap: 10px; margin-top: 10px;">
+                            <button type="submit" id="btn-save-category" class="btn-premium"><i class="fa-solid fa-plus"></i> Save Category</button>
+                            <button type="button" id="btn-cancel-category-edit" class="btn-outline" style="display: none;">Cancel Edit</button>
+                        </div>
+                    </form>
+
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>Icon</th>
+                                    <th>Key ID</th>
+                                    <th>Name</th>
+                                    <th>Parent ID</th>
+                                    <th>Image Link</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="categories-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Customer Governance Pane -->
+            <div id="pane-customers" class="pane">
+                <div class="glass-panel panel-section">
+                    <h3 style="margin-bottom: 15px;"><i class="fa-solid fa-users-gear"></i> Customer Accounts Governance</h3>
+                    <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;">Manage registered buyer profiles, check wallet balances, and suspend/reactivate accounts.</p>
+                    
+                    <div class="table-container">
+                        <table class="premium-table">
+                            <thead>
+                                <tr>
+                                    <th>User ID</th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Role</th>
+                                    <th>Wallet Balance</th>
+                                    <th>Account Status</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="customers-table-body">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>

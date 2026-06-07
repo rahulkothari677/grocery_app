@@ -6,6 +6,23 @@ const BASE_URL = 'http://localhost:5000/api';
 async function runTest() {
     console.log("=== LuxeGrocer Item Substitutions & Chat Connect Verification Test ===");
 
+    // Reset Organic Greek Yogurt stock to ensure test consistency
+    const fs = require('fs');
+    const path = require('path');
+    const dbPath = path.join(__dirname, 'backend', 'db.json');
+    if (fs.existsSync(dbPath)) {
+        const dbData = JSON.parse(fs.readFileSync(dbPath, 'utf8'));
+        const storeIdx = dbData.stores.findIndex(s => s.id === 'store-1');
+        if (storeIdx !== -1) {
+            const prodIdx = dbData.stores[storeIdx].products.findIndex(p => p.id === 'p1-2');
+            if (prodIdx !== -1) {
+                dbData.stores[storeIdx].products[prodIdx].stock = 20;
+                fs.writeFileSync(dbPath, JSON.stringify(dbData, null, 2));
+                console.log("✅ Reset Organic Greek Yogurt stock to 20 for test consistency.");
+            }
+        }
+    }
+
     // Step 1: Login as Merchant & Customer
     console.log("\n1. Logging in users...");
     const merchantLogin = await fetch(`${BASE_URL}/auth/login`, {

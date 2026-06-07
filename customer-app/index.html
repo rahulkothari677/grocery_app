@@ -12,6 +12,13 @@
 </head>
 <body>
 
+    <!-- System Broadcast Alert Bar -->
+    <div id="broadcast-alert-bar" style="display: none; background: linear-gradient(90deg, #b91c1c 0%, #dc2626 100%); color: white; text-align: center; padding: 10px; font-size: 0.85rem; font-weight: bold; position: sticky; top: 0; z-index: 4000; box-shadow: 0 2px 10px rgba(0,0,0,0.3); align-items: center; justify-content: center; gap: 10px;">
+        <span style="display: inline-flex; align-items: center; gap: 5px;"><i class="fa-solid fa-bullhorn"></i> PLATFORM ALERT:</span>
+        <span id="broadcast-alert-text">System notice goes here.</span>
+        <button id="btn-close-broadcast" style="background: transparent; border: none; color: white; cursor: pointer; font-size: 1rem; font-weight: bold; margin-left: 10px; padding: 0 5px;"><i class="fa-solid fa-xmark"></i></button>
+    </div>
+
     <!-- Sticky Header & Nav -->
     <header class="navbar">
         <div class="container nav-container">
@@ -152,6 +159,9 @@
                         <!-- Open Only Filter -->
                         <button type="button" class="btn-outline filter-store-btn" id="btn-filter-open-only" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 20px;"><i class="fa-solid fa-circle" style="font-size: 0.5rem; color: #10b981; margin-right: 5px;"></i> Open Only</button>
                         
+                        <!-- Veg Only Filter -->
+                        <button type="button" class="btn-outline filter-store-btn" id="btn-filter-veg-only" style="padding: 6px 12px; font-size: 0.8rem; font-weight: 600; border-radius: 20px;"><i class="fa-solid fa-leaf" style="font-size: 0.75rem; color: #10b981; margin-right: 5px;"></i> Veg Only</button>
+                        
                         <!-- Sort select -->
                         <div style="position: relative; display: flex; align-items: center;">
                             <span style="font-size: 0.8rem; color: var(--text-muted); margin-right: 8px; font-weight: 500;">Sort:</span>
@@ -200,6 +210,15 @@
                             </label>
                             <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
                                 <input type="radio" name="search-sort" value="rating" style="accent-color: var(--primary);"> Top Rated Products
+                            </label>
+                        </div>
+                    </div>
+
+                    <div class="filter-section">
+                        <h4>Dietary Preference</h4>
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-top: 8px;">
+                            <label style="display: flex; align-items: center; gap: 8px; font-size: 0.9rem; cursor: pointer;">
+                                <input type="checkbox" id="search-filter-veg-only" style="accent-color: var(--primary);"> Veg Only
                             </label>
                         </div>
                     </div>
@@ -287,6 +306,17 @@
                         <div class="form-group">
                             <label for="checkout-address">Delivery Address Details</label>
                             <textarea id="checkout-address" class="glass-input" rows="3" required placeholder="Flat, Street, Landmark details..."></textarea>
+                        </div>
+                        
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label for="checkout-instructions">Delivery Instructions for Rider</label>
+                            <textarea id="checkout-instructions" class="glass-input" rows="2" placeholder="E.g., Leave at door, Don't ring bell, Call on arrival..."></textarea>
+                            <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px;" id="instruction-chips">
+                                <button type="button" class="btn-outline inst-chip" data-text="Don't ring bell" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; height: auto;">🔇 Don't ring bell</button>
+                                <button type="button" class="btn-outline inst-chip" data-text="Leave at gate" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; height: auto;">🚪 Leave at gate</button>
+                                <button type="button" class="btn-outline inst-chip" data-text="Avoid calling" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; height: auto;">🔇 Avoid calling</button>
+                                <button type="button" class="btn-outline inst-chip" data-text="Leave with guard" style="padding: 4px 10px; font-size: 0.75rem; border-radius: 12px; height: auto;">👮 Leave with guard</button>
+                            </div>
                         </div>
                         
                         <!-- Rider Tipping Widget -->
@@ -925,6 +955,142 @@
                 </div>
                 <button type="submit" class="btn-premium" style="width: 100%; padding: 10px; background: var(--secondary); border-color: var(--secondary);">Reset Password</button>
             </form>
+        </div>
+    </div>
+
+    <!-- Cancellation Reason Modal -->
+    <div class="modal-overlay" id="modal-cancel-reason" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; padding: 30px; text-align: center; position: relative;">
+            <button class="btn-icon" id="btn-close-cancel-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.5rem; color: var(--danger); margin-bottom: 8px;"><i class="fa-solid fa-circle-exclamation"></i></div>
+                <h3>Order Cancellation</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Please help us improve our service by selecting a reason for cancellation.</p>
+            </div>
+            <form id="form-cancel-order" style="display: flex; flex-direction: column; gap: 20px;">
+                <div class="form-group" style="text-align: left;">
+                    <label for="cancel-reason-select" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Cancellation Reason</label>
+                    <select id="cancel-reason-select" class="glass-input" style="width: 100%;" required>
+                        <option value="" disabled selected>Select a reason...</option>
+                        <option value="Changed my mind">Changed my mind</option>
+                        <option value="Ordered wrong items">Ordered wrong items</option>
+                        <option value="Incorrect delivery address">Incorrect delivery address</option>
+                        <option value="Forgot to apply coupon">Forgot to apply coupon</option>
+                        <option value="Delivery time too long">Delivery time too long</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div class="form-group" style="text-align: left; display: none;" id="cancel-reason-other-group">
+                    <label for="cancel-reason-other" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Specify details</label>
+                    <input type="text" id="cancel-reason-other" class="glass-input" placeholder="Type custom reason..." style="width: 100%;">
+                </div>
+                <button type="submit" class="btn-premium" style="width: 100%; padding: 12px; background: var(--danger); border-color: var(--danger);">Confirm Cancellation</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Invoice Modal -->
+    <div class="modal-overlay" id="modal-invoice" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 600px; padding: 30px; position: relative; max-height: 90vh; overflow-y: auto;">
+            <button class="btn-icon" id="btn-close-invoice-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div id="invoice-print-area">
+                <div style="display: flex; justify-content: space-between; border-bottom: 1px dashed var(--border-color); padding-bottom: 15px; margin-bottom: 15px;">
+                    <div>
+                        <h2 style="color: var(--secondary); font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px;">LuxeGrocer Marketplace</h2>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);" id="invoice-store-details">Store Name</p>
+                    </div>
+                    <div style="text-align: right;">
+                        <h3 style="font-size: 1.1rem; color: var(--text-main);">TAX INVOICE</h3>
+                        <p style="font-size: 0.8rem; color: var(--text-muted);" id="invoice-id-date">Order ID | Date</p>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom: 15px; font-size: 0.85rem;">
+                    <strong>Billed To:</strong>
+                    <div id="invoice-customer-details" style="color: var(--text-muted); margin-top: 4px;">Customer Info</div>
+                </div>
+                
+                <table style="width: 100%; border-collapse: collapse; font-size: 0.85rem; margin-bottom: 20px;">
+                    <thead>
+                        <tr style="border-bottom: 1px solid var(--border-color); text-align: left; font-weight: bold; color: var(--text-main);">
+                            <th style="padding: 8px 0;">Item Description</th>
+                            <th style="padding: 8px 0; text-align: center;">Qty</th>
+                            <th style="padding: 8px 0; text-align: right;">Unit Price</th>
+                            <th style="padding: 8px 0; text-align: right;">Total Price</th>
+                        </tr>
+                    </thead>
+                    <tbody id="invoice-items-body" style="color: var(--text-muted);">
+                        <!-- Injected -->
+                    </tbody>
+                </table>
+                
+                <div style="width: 250px; margin-left: auto; font-size: 0.85rem; display: flex; flex-direction: column; gap: 8px; border-top: 1px dashed var(--border-color); padding-top: 15px;">
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Item Subtotal:</span>
+                        <span id="invoice-subtotal">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;" id="invoice-cgst-row">
+                        <span>CGST (2.5%):</span>
+                        <span id="invoice-cgst">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;" id="invoice-sgst-row">
+                        <span>SGST (2.5%):</span>
+                        <span id="invoice-sgst">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;">
+                        <span>Delivery Fee:</span>
+                        <span id="invoice-del-fee">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; color: var(--primary);" id="invoice-discount-row">
+                        <span>Discount Coupon:</span>
+                        <span id="invoice-discount">-₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between;" id="invoice-tip-row">
+                        <span>Rider Tip:</span>
+                        <span id="invoice-tip">₹0.00</span>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-weight: bold; color: var(--text-main); font-size: 1rem; border-top: 1px solid var(--border-color); padding-top: 8px; margin-top: 4px;">
+                        <span>Invoice Total:</span>
+                        <span id="invoice-grand-total">₹0.00</span>
+                    </div>
+                </div>
+            </div>
+            
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button class="btn-outline" style="flex: 1; padding: 10px;" id="btn-print-invoice"><i class="fa-solid fa-print"></i> Print Invoice</button>
+                <button class="btn-premium" style="flex: 1; padding: 10px;" id="btn-close-invoice">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tip Rider Modal -->
+    <div class="modal-overlay" id="modal-tip-rider" style="display: none; z-index: 3100;">
+        <div class="modal-content glass-panel" style="max-width: 420px; padding: 30px; text-align: center; position: relative;">
+            <button class="btn-icon" id="btn-close-tip-modal" style="position: absolute; top: 16px; right: 16px; width: 32px; height: 32px;">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <div style="text-align: center; margin-bottom: 20px;">
+                <div style="font-size: 2.5rem; color: var(--secondary); margin-bottom: 8px;"><i class="fa-solid fa-hand-holding-dollar"></i></div>
+                <h3>Tip Your Delivery Partner</h3>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 4px;">Support your rider's hard work. 100% of this tip goes directly to the rider.</p>
+            </div>
+            
+            <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                <button type="button" class="btn-outline post-tip-btn" data-tip="15" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹15</button>
+                <button type="button" class="btn-outline post-tip-btn" data-tip="30" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹30</button>
+                <button type="button" class="btn-outline post-tip-btn" data-tip="50" style="flex: 1; padding: 10px; border-radius: 8px; font-weight: 600;">₹50 ❤️</button>
+            </div>
+            
+            <div class="form-group" style="text-align: left; margin-bottom: 20px;">
+                <label for="post-tip-custom" style="font-size: 0.8rem; font-weight: 600; color: var(--text-main); margin-bottom: 6px; display: block;">Custom Tip Amount (₹)</label>
+                <input type="number" id="post-tip-custom" class="glass-input" placeholder="Enter custom amount..." style="width: 100%;">
+            </div>
+            
+            <button class="btn-premium" style="width: 100%; padding: 12px;" id="btn-submit-tip">Submit Tip from Wallet</button>
         </div>
     </div>
 

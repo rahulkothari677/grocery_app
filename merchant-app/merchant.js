@@ -237,7 +237,18 @@ document.addEventListener('DOMContentLoaded', () => {
         substituteOrderId: document.getElementById('substitute-order-id'),
         substituteOriginalItemId: document.getElementById('substitute-original-item-id'),
         substituteOriginalItemName: document.getElementById('substitute-original-item-name'),
-        formSuggestSubstitution: document.getElementById('form-suggest-substitution')
+        formSuggestSubstitution: document.getElementById('form-suggest-substitution'),
+        btnExportCsv: document.getElementById('btn-export-csv'),
+        btnImportCsv: document.getElementById('btn-import-csv'),
+        csvImportFile: document.getElementById('csv-import-file'),
+        lowStockWarningPanel: document.getElementById('low-stock-warning-panel'),
+        lowStockList: document.getElementById('low-stock-list'),
+        operatingHoursTableBody: document.getElementById('operating-hours-table-body'),
+        modalDeclineOrder: document.getElementById('modal-decline-order'),
+        btnCloseDeclineModal: document.getElementById('btn-close-decline-modal'),
+        formDeclineOrder: document.getElementById('form-decline-order'),
+        declineOrderId: document.getElementById('decline-order-id'),
+        declineSelectReason: document.getElementById('decline-select-reason')
     };
 
     // --- Toast Notifications ---
@@ -525,6 +536,40 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.settingsStoreMov.value = store.minOrderValue || 0;
             elements.settingsStoreUpiVpa.value = store.upiVpa || '';
             elements.settingsStoreUpiName.value = store.upiName || '';
+
+            // Populate operating hours scheduler
+            const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+            if (elements.operatingHoursTableBody) {
+                elements.operatingHoursTableBody.innerHTML = '';
+                const hours = store.operatingHours || {};
+                days.forEach(day => {
+                    const dayHours = hours[day] || { open: '09:00', close: '22:00', isClosed: false };
+                    const tr = document.createElement('tr');
+                    tr.innerHTML = `
+                        <td style="padding: 10px 15px; font-weight: bold; text-transform: capitalize;">${day}</td>
+                        <td style="padding: 10px 15px;">
+                            <input type="time" class="glass-input hours-open" data-day="${day}" value="${dayHours.open}" required style="padding: 4px 8px; font-size: 0.8rem; width: 100px; height: auto;">
+                        </td>
+                        <td style="padding: 10px 15px;">
+                            <input type="time" class="glass-input hours-close" data-day="${day}" value="${dayHours.close}" required style="padding: 4px 8px; font-size: 0.8rem; width: 100px; height: auto;">
+                        </td>
+                        <td style="padding: 10px 15px; text-align: center;">
+                            <input type="checkbox" class="hours-closed" data-day="${day}" ${dayHours.isClosed ? 'checked' : ''} style="width: 16px; height: 16px; accent-color: var(--primary);">
+                        </td>
+                    `;
+                    const openInput = tr.querySelector('.hours-open');
+                    const closeInput = tr.querySelector('.hours-close');
+                    const closedCheckbox = tr.querySelector('.hours-closed');
+                    closedCheckbox.addEventListener('change', (e) => {
+                        openInput.disabled = e.target.checked;
+                        closeInput.disabled = e.target.checked;
+                    });
+                    openInput.disabled = dayHours.isClosed;
+                    closeInput.disabled = dayHours.isClosed;
+                    
+                    elements.operatingHoursTableBody.appendChild(tr);
+                });
+            }
 
             // Load settings banner preview
             if (store.image && store.image.trim() !== '') {
@@ -1097,6 +1142,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     await renderOwnerOrders();
                 });
                 btnContainer.appendChild(acceptForm);
+
+                const declineBtn = document.createElement('button');
+                declineBtn.type = 'button';
+                declineBtn.className = 'btn-premium';
+                declineBtn.style.cssText = 'padding: 8px 16px; font-size: 0.8rem; height: 32px; background: linear-gradient(135deg, var(--danger) 0%, #ef4444 100%); border-color: var(--danger);';
+                declineBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Decline';
+                declineBtn.addEventListener('click', () => {
+                    openDeclineOrderModal(order.id);
+                });
+                btnContainer.appendChild(declineBtn);
             } else if (order.status === 'Preparing') {
                 const deliverBtn = document.createElement('button');
                 deliverBtn.className = 'btn-premium';
@@ -1108,6 +1163,16 @@ document.addEventListener('DOMContentLoaded', () => {
                     await openAssignRiderModal(order.id);
                 });
                 btnContainer.appendChild(deliverBtn);
+
+                const cancelBtn = document.createElement('button');
+                cancelBtn.type = 'button';
+                cancelBtn.className = 'btn-premium';
+                cancelBtn.style.cssText = 'padding: 8px 16px; font-size: 0.8rem; height: 32px; background: linear-gradient(135deg, var(--danger) 0%, #ef4444 100%); border-color: var(--danger);';
+                cancelBtn.innerHTML = '<i class="fa-solid fa-xmark"></i> Cancel';
+                cancelBtn.addEventListener('click', () => {
+                    openDeclineOrderModal(order.id);
+                });
+                btnContainer.appendChild(cancelBtn);
             } else if (order.status === 'Out for Delivery') {
                 const verifyForm = document.createElement('form');
                 verifyForm.style.display = 'flex';
@@ -1261,6 +1326,76 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.ownerInventoryTableBody.innerHTML = '';
         const store = await db.getStoreById(ownedStoreId);
         if (!store) return;
+
+        // Check for low stock items
+        const lowStockItems = [];
+        store.products.forEach(prod => {
+            if (prod.variants && prod.variants.length > 0) {
+                prod.variants.forEach(v => {
+                    if (v.stock <= 5) {
+                        lowStockItems.push({
+                            id: prod.id,
+                            name: `${prod.name} (${v.name})`,
+                            stock: v.stock,
+                            isVariant: true,
+                            variantId: v.id
+                        });
+                    }
+                });
+            } else {
+                if (prod.stock <= 5) {
+                    lowStockItems.push({
+                        id: prod.id,
+                        name: prod.name,
+                        stock: prod.stock,
+                        isVariant: false
+                    });
+                }
+            }
+        });
+
+        if (elements.lowStockWarningPanel && elements.lowStockList) {
+            if (lowStockItems.length > 0) {
+                elements.lowStockWarningPanel.style.display = 'block';
+                elements.lowStockList.innerHTML = '';
+                lowStockItems.forEach(item => {
+                    const row = document.createElement('div');
+                    row.style.cssText = 'display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 8px; font-size: 0.85rem;';
+                    row.innerHTML = `
+                        <div>
+                            <strong>${item.name}</strong> - <span style="color: #ef4444; font-weight: bold;">Only ${item.stock} left</span>
+                        </div>
+                        <div style="display: flex; gap: 8px; align-items: center;">
+                            <input type="number" class="glass-input restock-input" min="0" value="20" style="width: 70px; padding: 4px 8px; font-size: 0.8rem; height: auto;">
+                            <button type="button" class="btn-premium restock-btn" style="padding: 4px 10px; font-size: 0.75rem;"><i class="fa-solid fa-plus"></i> Restock</button>
+                        </div>
+                    `;
+                    row.querySelector('.restock-btn').addEventListener('click', async () => {
+                        const amount = parseInt(row.querySelector('.restock-input').value) || 0;
+                        const originalProduct = store.products.find(p => p.id === item.id);
+                        if (!originalProduct) return;
+                        
+                        let updatedProduct = JSON.parse(JSON.stringify(originalProduct));
+                        if (item.isVariant) {
+                            const vIdx = updatedProduct.variants.findIndex(v => v.id === item.variantId);
+                            if (vIdx !== -1) {
+                                updatedProduct.variants[vIdx].stock += amount;
+                            }
+                            updatedProduct.stock = updatedProduct.variants.reduce((sum, v) => sum + v.stock, 0);
+                        } else {
+                            updatedProduct.stock += amount;
+                        }
+                        
+                        await db.updateProduct(ownedStoreId, item.id, updatedProduct);
+                        showToast(`Restocked ${item.name} by ${amount} units.`, "success");
+                        await renderOwnerInventory();
+                    });
+                    elements.lowStockList.appendChild(row);
+                });
+            } else {
+                elements.lowStockWarningPanel.style.display = 'none';
+            }
+        }
 
         if (store.products.length === 0) {
             elements.ownerInventoryTableBody.innerHTML = `
@@ -1661,6 +1796,19 @@ document.addEventListener('DOMContentLoaded', () => {
         
         if (settingsStoreCustomBannerBase64) {
             configData.image = settingsStoreCustomBannerBase64;
+        }
+
+        const operatingHours = {};
+        const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+        if (elements.operatingHoursTableBody) {
+            days.forEach(day => {
+                const tr = document.querySelector(`#operating-hours-table-body tr input[data-day="${day}"]`).closest('tr');
+                const open = tr.querySelector('.hours-open').value;
+                const close = tr.querySelector('.hours-close').value;
+                const isClosed = tr.querySelector('.hours-closed').checked;
+                operatingHours[day] = { open, close, isClosed };
+            });
+            configData.operatingHours = operatingHours;
         }
         
         const updated = await db.updateStoreConfig(ownedStoreId, configData);
@@ -2328,6 +2476,230 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 showToast(res && res.error ? res.error : "Failed to create coupon.", "error");
             }
+        });
+    }
+
+    // Decline order modal listeners
+    function openDeclineOrderModal(orderId) {
+        elements.declineOrderId.value = orderId;
+        elements.modalDeclineOrder.style.display = 'flex';
+        elements.modalDeclineOrder.classList.add('active');
+    }
+
+    if (elements.btnCloseDeclineModal) {
+        elements.btnCloseDeclineModal.addEventListener('click', () => {
+            elements.modalDeclineOrder.style.display = 'none';
+            elements.modalDeclineOrder.classList.remove('active');
+        });
+    }
+
+    if (elements.formDeclineOrder) {
+        elements.formDeclineOrder.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const orderId = elements.declineOrderId.value;
+            const reason = elements.declineSelectReason.value;
+            
+            const success = await db.updateOrderStatus(orderId, 'Cancelled', `Store owner declined/cancelled the order: ${reason}`, {
+                reason,
+                cancelledBy: 'merchant'
+            });
+            
+            if (success) {
+                showToast("Order declined and cancelled successfully.", "success");
+                elements.modalDeclineOrder.style.display = 'none';
+                elements.modalDeclineOrder.classList.remove('active');
+                await renderOwnerOrders();
+            } else {
+                showToast("Failed to decline order.", "error");
+            }
+        });
+    }
+
+    // CSV Export Handler
+    if (elements.btnExportCsv) {
+        elements.btnExportCsv.addEventListener('click', async () => {
+            const store = await db.getStoreById(ownedStoreId);
+            if (!store || !store.products) {
+                showToast("No products found to export.", "error");
+                return;
+            }
+            
+            const headers = ['id', 'name', 'variantId', 'variantName', 'category', 'price', 'unit', 'stock', 'desc', 'dietaryType'];
+            const rows = [headers.join(',')];
+            
+            store.products.forEach(p => {
+                const descEscaped = (p.desc || '').replace(/"/g, '""');
+                const dietary = p.dietaryType || 'None';
+                if (p.variants && p.variants.length > 0) {
+                    p.variants.forEach(v => {
+                        const line = [
+                            p.id,
+                            `"${p.name.replace(/"/g, '""')}"`,
+                            v.id,
+                            `"${v.name.replace(/"/g, '""')}"`,
+                            p.category,
+                            v.price,
+                            v.unit || '',
+                            v.stock,
+                            `"${descEscaped}"`,
+                            dietary
+                        ];
+                        rows.push(line.join(','));
+                    });
+                } else {
+                    const line = [
+                        p.id,
+                        `"${p.name.replace(/"/g, '""')}"`,
+                        '',
+                        '',
+                        p.category,
+                        p.price,
+                        p.unit || '',
+                        p.stock,
+                        `"${descEscaped}"`,
+                        dietary
+                    ];
+                    rows.push(line.join(','));
+                }
+            });
+            
+            const csvContent = rows.join('\n');
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.setAttribute('href', url);
+            link.setAttribute('download', `catalog_${ownedStoreId}.csv`);
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            showToast("Catalog exported as CSV.", "success");
+        });
+    }
+
+    // CSV Import Handler triggers file select
+    if (elements.btnImportCsv && elements.csvImportFile) {
+        elements.btnImportCsv.addEventListener('click', () => {
+            elements.csvImportFile.click();
+        });
+        
+        elements.csvImportFile.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            const reader = new FileReader();
+            reader.onload = async (event) => {
+                const csvText = event.target.result;
+                try {
+                    const parsedProducts = parseCsvToProducts(csvText);
+                    if (parsedProducts.length === 0) {
+                        showToast("Failed to parse products from CSV or empty file.", "error");
+                        return;
+                    }
+                    
+                    const response = await fetch(`${db.baseUrl}/stores/${ownedStoreId}/products/bulk`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('luxegrocer_merchant_auth_token')}`
+                        },
+                        body: JSON.stringify({ products: parsedProducts })
+                    });
+                    
+                    if (response.ok) {
+                        showToast(`Catalog imported: ${parsedProducts.length} items successfully loaded.`, "success");
+                        await renderOwnerInventory();
+                    } else {
+                        const err = await response.json();
+                        showToast(err.error || 'Failed to import catalog CSV.', 'error');
+                    }
+                } catch (err) {
+                    console.error("CSV import parse error:", err);
+                    showToast("Malformed CSV catalog structure.", "error");
+                }
+            };
+            reader.readAsText(file);
+            elements.csvImportFile.value = '';
+        });
+    }
+
+    function parseCsvToProducts(csvText) {
+        const lines = csvText.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+        if (lines.length <= 1) return [];
+        
+        const headers = lines[0].split(',').map(h => h.trim().replace(/^["']|["']$/g, ''));
+        const productsMap = {};
+        
+        for (let i = 1; i < lines.length; i++) {
+            const line = lines[i];
+            const values = [];
+            let inQuotes = false;
+            let currentVal = '';
+            for (let c = 0; c < line.length; c++) {
+                const char = line[c];
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(currentVal.trim().replace(/^["']|["']$/g, '').replace(/""/g, '"'));
+                    currentVal = '';
+                } else {
+                    currentVal += char;
+                }
+            }
+            values.push(currentVal.trim().replace(/^["']|["']$/g, '').replace(/""/g, '"'));
+            
+            const row = {};
+            headers.forEach((header, index) => {
+                row[header] = values[index] || '';
+            });
+            
+            const id = row.id || ('prod_' + Math.random().toString(36).substring(2, 9));
+            const name = row.name;
+            const category = row.category;
+            const price = parseFloat(row.price) || 0;
+            const unit = row.unit || '1 Unit';
+            const stock = parseInt(row.stock) || 0;
+            const desc = row.desc || '';
+            const dietaryType = row.dietaryType || 'None';
+            
+            const variantId = row.variantId;
+            const variantName = row.variantName;
+            
+            if (!name || !category) continue;
+            
+            if (!productsMap[id]) {
+                productsMap[id] = {
+                    id,
+                    name,
+                    category,
+                    desc,
+                    dietaryType,
+                    variants: [],
+                    price,
+                    unit,
+                    stock
+                };
+            }
+            
+            if (variantId && variantName) {
+                productsMap[id].variants.push({
+                    id: variantId,
+                    name: variantName,
+                    price,
+                    unit,
+                    stock
+                });
+            }
+        }
+        
+        return Object.values(productsMap).map(p => {
+            if (p.variants.length > 0) {
+                p.price = p.variants[0].price;
+                p.unit = p.variants[0].unit;
+                p.stock = p.variants.reduce((sum, v) => sum + v.stock, 0);
+            } else {
+                delete p.variants;
+            }
+            return p;
         });
     }
 

@@ -349,7 +349,7 @@ class LuxeStore {
         return orders.find(o => o.id === orderId);
     }
 
-    async createOrder(storeId, cartItems, customerDetails, discount = 0, voucherCode = '') {
+    async createOrder(storeId, cartItems, customerDetails, discount = 0, voucherCode = '', deliveryInstructions = '') {
         try {
             const store = await this.getStoreById(storeId);
             if (!store) return null;
@@ -363,7 +363,8 @@ class LuxeStore {
                 deliveryFee,
                 discount,
                 voucherCode,
-                customer: customerDetails
+                customer: customerDetails,
+                deliveryInstructions
             };
             
             const res = await fetch(`${this.baseUrl}/orders`, {
@@ -449,6 +450,19 @@ class LuxeStore {
             return res.ok;
         } catch (err) {
             console.error("API error deleting address:", err);
+            return false;
+        }
+    }
+
+    async makeAddressDefault(addressId) {
+        try {
+            const res = await fetch(`${this.baseUrl}/users/addresses/${addressId}/make-default`, {
+                method: 'POST',
+                headers: this.getHeaders()
+            });
+            return res.ok;
+        } catch (err) {
+            console.error("API error making address default:", err);
             return false;
         }
     }

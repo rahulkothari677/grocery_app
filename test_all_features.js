@@ -11,7 +11,8 @@ const testScripts = [
   'test_compression.js',
   'test_migration.js',
   'test_search_recommend.js',
-  'test_admin_governance.js'
+  'test_admin_governance.js',
+  'test_basic_gaps.js'
 ];
 
 console.log("=== LuxeGrocer Master Feature Verification Runner ===\n");

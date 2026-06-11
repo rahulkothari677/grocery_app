@@ -2925,4 +2925,90 @@ body.category-browser-active .cat-filter-header {
     }
 }
 
+/* Scroll-collapsing header, sticky search/categories on landing view */
+body.on-landing-view .navbar,
+body.on-landing-view .top-mode-bar {
+    position: relative !important;
+}
+
+body.on-landing-view .search-container-large {
+    position: sticky !important;
+    top: 0 !important;
+    z-index: 100 !important;
+    background: var(--bg-main) !important;
+    padding: 10px 16px !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25) !important;
+}
+
+body.on-landing-view .search-bar-wrapper {
+    max-width: 680px;
+    margin: 0 auto;
+}
+
+body.on-landing-view #landing-categories-section {
+    display: contents !important;
+}
+
+body.on-landing-view #category-list-container {
+    position: sticky !important;
+    top: 76px !important; /* height of sticky search container */
+    z-index: 99 !important;
+    background: var(--bg-main) !important;
+    padding: 12px 16px !important;
+    border-bottom: 1px solid var(--border-color) !important;
+    width: 100% !important;
+    margin-bottom: 0 !important;
+}
+
+/* Scroll offset so bottom cart dock doesn't overlay product content */
+main {
+    padding-bottom: 100px !important;
+}
+body.category-browser-active main {
+    padding-bottom: 0 !important;
+}
+
+/* Hide stock tags from front view listing shelves & category browser */
+#view-landing .product-stock-tag,
+#view-category-browser .product-stock-tag {
+    display: none !important;
+}
+
+/* Relocate discount badges to top-right of image containers and style them flush */
+.product-badge-promo {
+    position: absolute !important;
+    top: 0 !important;
+    right: 0 !important;
+    left: auto !important;
+    bottom: auto !important;
+    background: #10b981 !important;
+    color: white !important;
+    font-family: var(--font-heading) !important;
+    font-weight: 800 !important;
+    font-size: 0.82rem !important;
+    padding: 4px 10px 4px 8px !important;
+    border-radius: 0 16px 0 12px !important;
+    z-index: 10 !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25) !important;
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    text-transform: uppercase !important;
+}
+
+@media (max-width: 600px) {
+    .product-badge-promo {
+        top: 0 !important;
+        right: 0 !important;
+        left: auto !important;
+        bottom: auto !important;
+        font-size: 0.68rem !important;
+        padding: 3px 6px !important;
+        border-radius: 0 16px 0 8px !important;
+    }
+}
+
 

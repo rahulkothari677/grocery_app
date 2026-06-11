@@ -1107,6 +1107,12 @@ document.addEventListener('DOMContentLoaded', () => {
             document.body.classList.remove('category-browser-active');
         }
 
+        if (viewName === 'landing') {
+            document.body.classList.add('on-landing-view');
+        } else {
+            document.body.classList.remove('on-landing-view');
+        }
+
         // Hide all views
         elements.viewLanding.style.display = 'none';
         elements.viewSearchResults.style.display = 'none';

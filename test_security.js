@@ -213,6 +213,38 @@ async function runTest() {
     }
     console.log("PASS: Invalid payment method blocked successfully.");
 
+    // Test 5.3: Price Parameter Tampering
+    console.log("Testing checkout order with tampered item price (₹0.01 instead of actual price)...");
+    const tamperedPriceRes = await fetch(`${BASE_URL}/orders`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${customerToken}`
+        },
+        body: JSON.stringify({
+            storeId: 'store-1',
+            items: [
+                { id: 'p1-1', name: 'Premium Full Cream Milk', price: 0.01, quantity: 1, storeId: 'store-1' }
+            ],
+            deliveryFee: 20,
+            discount: 0,
+            customer: {
+                name: "Test Customer",
+                phone: "+91 99999 99999",
+                address: "HSR Layout",
+                payment: "cod"
+            }
+        })
+    });
+    
+    console.log(`  Response status: ${tamperedPriceRes.status}`);
+    const tamperedPriceData = await tamperedPriceRes.json();
+    console.log("  Response body:", tamperedPriceData);
+    if (tamperedPriceRes.status !== 400 || !tamperedPriceData.error.toLowerCase().includes('price mismatch')) {
+        throw new Error("Failed: Expected order checkout with tampered item price to be blocked with 400 Bad Request and a price mismatch error");
+    }
+    console.log("PASS: Price parameter tampering blocked successfully.");
+
     console.log("\nALL SECURITY HARDENING AND ROUTE SCHEMA VALIDATION TESTS PASSED!");
 }
 

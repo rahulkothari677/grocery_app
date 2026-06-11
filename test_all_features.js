@@ -12,7 +12,8 @@ const testScripts = [
   'test_migration.js',
   'test_search_recommend.js',
   'test_admin_governance.js',
-  'test_basic_gaps.js'
+  'test_basic_gaps.js',
+  'test_cart_discounts_map.js'
 ];
 
 console.log("=== LuxeGrocer Master Feature Verification Runner ===\n");

@@ -1,10 +1,12 @@
 // app.js - LuxeGrocer Consumer-Centric Client-Side Controller
+const BACKEND_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:5000' : window.location.hostname + ':5000';
+const BACKEND_URL = `${window.location.protocol}//${BACKEND_HOST}`;
 
 // Intercept console.error to log to server
 const originalConsoleError = console.error;
 console.error = function(...args) {
     originalConsoleError.apply(console, args);
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'customer-app console.error', error: args.join(' ') })
@@ -19,7 +21,7 @@ window.addEventListener('error', (event) => {
         colno: event.colno,
         stack: event.error ? event.error.stack : ''
     };
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'customer-app window.onerror', error: errData })
@@ -49,7 +51,7 @@ window.addEventListener('error', (event) => {
 
 // Event Logging Hooks for Debugging
 document.addEventListener('click', (e) => {
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -63,7 +65,7 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('submit', (e) => {
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -98,6 +100,17 @@ document.addEventListener('DOMContentLoaded', () => {
     let storeSortBy = 'distance';
     let checkoutCustomerData = null;
     let checkoutDiscount = 0;
+    
+    // Modal store selector state
+    let activeDetailStore = null;
+    let activeDetailProduct = null;
+    let activeDetailVariant = null;
+
+    // --- Leaflet Map State ---
+    let accountAddressMap = null;
+    let accountAddressMarker = null;
+    let locationSimulationMap = null;
+    let locationSimulationMarker = null;
 
     // --- DOM Elements Cache ---
     const elements = {
@@ -359,7 +372,62 @@ document.addEventListener('DOMContentLoaded', () => {
         formStoreReview: document.getElementById('form-store-review'),
         reviewStoreNameText: document.getElementById('review-store-name-text'),
         reviewRatingValue: document.getElementById('review-rating-value'),
-        reviewComment: document.getElementById('review-comment')
+        reviewComment: document.getElementById('review-comment'),
+        
+        // Mobile bottom nav elements
+        btnNavHome: document.getElementById('btn-nav-home'),
+        btnNavCategories: document.getElementById('btn-nav-categories'),
+        btnNavReorder: document.getElementById('btn-nav-reorder'),
+        btnNavCart: document.getElementById('btn-nav-cart'),
+        navCartBadge: document.getElementById('nav-cart-badge'),
+
+        // Mission Popup Elements
+        heroTitleClickable: document.getElementById('hero-title-clickable'),
+        heroInfoIcon: document.getElementById('hero-info-icon'),
+        modalMissionInfo: document.getElementById('modal-mission-info'),
+        btnCloseMissionModal: document.getElementById('btn-close-mission-modal'),
+
+        // New Mode switcher buttons
+        btnModeStores: document.getElementById('btn-mode-stores'),
+        btnModeInstant: document.getElementById('btn-mode-instant'),
+        btnModeOffers: document.getElementById('btn-mode-offers'),
+
+        // Category browser view
+        viewCategoryBrowser: document.getElementById('view-category-browser'),
+        btnBackToLandingFromCat: document.getElementById('btn-back-to-landing-from-cat'),
+        catBrowserSidebar: document.getElementById('cat-browser-sidebar'),
+        catBrowserProductsContainer: document.getElementById('cat-browser-products-container'),
+        catBrowserOutOfStockSection: document.getElementById('cat-browser-out-of-stock-section'),
+        catBrowserOutOfStockContainer: document.getElementById('cat-browser-out-of-stock-container'),
+        selectCatSort: document.getElementById('select-cat-sort'),
+        btnCatFilterAll: document.getElementById('btn-cat-filter-all'),
+        btnCatFilterVeg: document.getElementById('btn-cat-filter-veg'),
+
+        // Bottom Cart Dock
+        floatingCartDock: document.getElementById('floating-cart-dock'),
+        dockCartCount: document.getElementById('dock-cart-count'),
+        dockCartTotal: document.getElementById('dock-cart-total'),
+        dockProgressText: document.getElementById('dock-progress-text'),
+        dockProgressBarVal: document.getElementById('dock-progress-bar-val'),
+        btnDockViewCart: document.getElementById('btn-dock-view-cart'),
+
+        // Product Details Modal
+        modalProductDetail: document.getElementById('modal-product-detail'),
+        btnCloseProductDetailModal: document.getElementById('btn-close-product-detail-modal'),
+        detailProductBadgeContainer: document.getElementById('detail-product-badge-container'),
+        detailProductDietaryBadge: document.getElementById('detail-product-dietary-badge'),
+        detailProductImageContainer: document.getElementById('detail-product-image-container'),
+        detailStoreNameBadge: document.getElementById('detail-store-name-badge'),
+        detailProductTitle: document.getElementById('detail-product-title'),
+        detailProductUnit: document.getElementById('detail-product-unit'),
+        detailProductDesc: document.getElementById('detail-product-desc'),
+        detailVariantsPills: document.getElementById('detail-variants-pills'),
+        detailProductPrice: document.getElementById('detail-product-price'),
+        detailActionContainer: document.getElementById('detail-action-container'),
+        detailSimilarProductsSection: document.getElementById('detail-similar-products-section'),
+        detailSimilarProductsCarousel: document.getElementById('detail-similar-products-carousel'),
+        detailCompareStoresSection: document.getElementById('detail-compare-stores-section'),
+        detailCompareStoresList: document.getElementById('detail-compare-stores-list')
     };
 
     // --- Customer Authentication Helpers ---
@@ -390,13 +458,60 @@ document.addEventListener('DOMContentLoaded', () => {
             // Load saved addresses and populate dropdown
             await populateCheckoutAddressSelect();
 
+            // Sync/Merge cart
+            try {
+                const dbCart = await db.getCart();
+                if (dbCart && dbCart.length > 0) {
+                    dbCart.forEach(dbItem => {
+                        const existing = cart.find(item => item.id === dbItem.id && item.variantId === dbItem.variantId);
+                        if (existing) {
+                            existing.quantity += dbItem.quantity;
+                        } else {
+                            cart.push(dbItem);
+                        }
+                    });
+                    saveCartToStorage();
+                } else if (cart.length > 0) {
+                    await db.saveCart(cart);
+                }
+                updateCartBadge();
+                if (currentView === 'landing' || currentView === 'store-profile') {
+                    renderCart();
+                }
+            } catch (err) {
+                console.error("Error syncing cart on login:", err);
+            }
+
             // Check for active orders to restore tracking screen
             try {
                 const orders = await db.getOrders();
-                const activeOrder = orders.find(o => o.status !== 'Delivered' && o.status !== 'Cancelled');
+                
+                // 1. Auto-redirect only for active orders placed within the last 45 minutes
+                const activeOrder = orders.find(o => {
+                    if (o.status === 'Delivered' || o.status === 'Cancelled') return false;
+                    const elapsed = Date.now() - new Date(o.timestamp).getTime();
+                    return elapsed <= 45 * 60 * 1000; // 45 minutes
+                });
+                
                 if (activeOrder) {
                     await startOrderTracking(activeOrder);
                     await switchView('order-tracker');
+                } else {
+                    // 2. Alert the user if their most recent order was automatically cancelled since their last session
+                    const sortedOrders = [...orders].sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                    if (sortedOrders.length > 0) {
+                        const lastOrder = sortedOrders[0];
+                        if (lastOrder.status === 'Cancelled') {
+                            const notifiedKey = `notified_cancelled_${lastOrder.id}`;
+                            if (!localStorage.getItem(notifiedKey)) {
+                                localStorage.setItem(notifiedKey, 'true');
+                                setTimeout(() => {
+                                    showToast(`Order #${lastOrder.id} was cancelled. Refund processed!`, 'error');
+                                    alert(`Order #${lastOrder.id} from ${lastOrder.storeName} was automatically cancelled because it exceeded the expected delivery window.\n\nRefund of ₹${(lastOrder.subtotal + lastOrder.deliveryFee - lastOrder.discount).toFixed(2)} has been credited back to your payment source.`);
+                                }, 800);
+                            }
+                        }
+                    }
                 }
             } catch (err) {
                 console.error("Error checking active orders on login/startup:", err);
@@ -411,6 +526,78 @@ document.addEventListener('DOMContentLoaded', () => {
             if (elements.checkoutAddressSelectGroup) elements.checkoutAddressSelectGroup.style.display = 'none';
         }
         await updateActiveOrderButtonVisibility();
+    }
+
+    function initAccountAddressMap(lat, lng) {
+        const mapContainer = document.getElementById('account-address-map');
+        if (!mapContainer) return;
+        if (!window.L) {
+            console.error("Leaflet.js is not loaded.");
+            return;
+        }
+        if (!accountAddressMap) {
+            accountAddressMap = L.map('account-address-map').setView([lat, lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(accountAddressMap);
+            accountAddressMarker = L.marker([lat, lng], { draggable: true }).addTo(accountAddressMap);
+            accountAddressMarker.on('dragend', function (e) {
+                const position = accountAddressMarker.getLatLng();
+                updateAddressInputs(position.lat, position.lng);
+            });
+            accountAddressMap.on('click', function (e) {
+                accountAddressMarker.setLatLng(e.latlng);
+                updateAddressInputs(e.latlng.lat, e.latlng.lng);
+            });
+        } else {
+            accountAddressMap.setView([lat, lng], 13);
+            accountAddressMarker.setLatLng([lat, lng]);
+        }
+        setTimeout(() => {
+            accountAddressMap.invalidateSize();
+        }, 100);
+    }
+
+    function updateAddressInputs(lat, lng) {
+        elements.accountAddressLat.value = lat.toFixed(4);
+        elements.accountAddressLng.value = lng.toFixed(4);
+        elements.accountAddressDetail.value = `Sector ${Math.floor(Math.random() * 8) + 1}, Near Block ${String.fromCharCode(65 + Math.floor(Math.random() * 5))}, HSR Layout, Bengaluru (Coords: ${lat.toFixed(4)}, ${lng.toFixed(4)})`;
+    }
+
+    function initLocationSimulationMap(lat, lng) {
+        const mapContainer = document.getElementById('location-simulation-map');
+        if (!mapContainer) return;
+        if (!window.L) {
+            console.error("Leaflet.js is not loaded.");
+            return;
+        }
+        if (!locationSimulationMap) {
+            locationSimulationMap = L.map('location-simulation-map').setView([lat, lng], 13);
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap'
+            }).addTo(locationSimulationMap);
+            locationSimulationMarker = L.marker([lat, lng], { draggable: true }).addTo(locationSimulationMap);
+            locationSimulationMarker.on('dragend', function (e) {
+                const position = locationSimulationMarker.getLatLng();
+                updateSimulationInputs(position.lat, position.lng);
+            });
+            locationSimulationMap.on('click', function (e) {
+                locationSimulationMarker.setLatLng(e.latlng);
+                updateSimulationInputs(e.latlng.lat, e.latlng.lng);
+            });
+        } else {
+            locationSimulationMap.setView([lat, lng], 13);
+            locationSimulationMarker.setLatLng([lat, lng]);
+        }
+        setTimeout(() => {
+            locationSimulationMap.invalidateSize();
+        }, 100);
+    }
+
+    function updateSimulationInputs(lat, lng) {
+        elements.locLat.value = lat.toFixed(4);
+        elements.locLng.value = lng.toFixed(4);
+        elements.locAddress.value = `Main Street, Sector ${Math.floor(Math.random() * 6) + 1}, Koramangala, Bengaluru (Coords: ${lat.toFixed(4)}, ${lng.toFixed(4)})`;
     }
 
     function showAccountTab(tabName) {
@@ -498,7 +685,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.style.alignItems = 'center';
             card.style.background = 'rgba(255,255,255,0.02)';
             
-            const emoji = addr.tag === 'Home' ? '🏠' : (addr.tag === 'Work' ? '💼' : '📍');
+            const faIcon = addr.tag === 'Home' ? '<i class="fa-solid fa-house"></i>' : (addr.tag === 'Work' ? '<i class="fa-solid fa-briefcase"></i>' : '<i class="fa-solid fa-location-pin"></i>');
             const defaultBadge = addr.isDefault 
                 ? `<span style="background: rgba(16,185,129,0.15); color: #10b981; font-size: 0.7rem; font-weight: bold; padding: 2px 8px; border-radius: 12px; margin-left: 8px; border: 1px solid #10b981;">Default</span>`
                 : `<button class="btn-outline make-default-btn" data-id="${addr.id}" style="font-size: 0.7rem; padding: 2px 8px; border-radius: 12px; margin-left: 8px; cursor: pointer; height: auto;">Make Default</button>`;
@@ -506,7 +693,7 @@ document.addEventListener('DOMContentLoaded', () => {
             card.innerHTML = `
                 <div style="flex-grow: 1; text-align: left;">
                     <div style="display: flex; align-items: center;">
-                        <strong style="font-size: 0.9rem; color: var(--primary);">${emoji} ${addr.tag}</strong>
+                        <strong style="font-size: 0.9rem; color: var(--primary);">${faIcon} ${addr.tag}</strong>
                         ${defaultBadge}
                     </div>
                     <p style="font-size: 0.8rem; color: var(--text-main); margin-top: 4px; line-height: 1.3;">${addr.address}</p>
@@ -914,12 +1101,19 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- SPA View Switcher ---
     async function switchView(viewName) {
+        if (viewName === 'category-browser') {
+            document.body.classList.add('category-browser-active');
+        } else {
+            document.body.classList.remove('category-browser-active');
+        }
+
         // Hide all views
         elements.viewLanding.style.display = 'none';
         elements.viewSearchResults.style.display = 'none';
         elements.viewStoreProfile.style.display = 'none';
         elements.viewCheckout.style.display = 'none';
         elements.viewOrderTracker.style.display = 'none';
+        if (elements.viewCategoryBrowser) elements.viewCategoryBrowser.style.display = 'none';
 
         // Show targets
         switch (viewName) {
@@ -944,8 +1138,28 @@ document.addEventListener('DOMContentLoaded', () => {
             case 'order-tracker':
                 elements.viewOrderTracker.style.display = 'block';
                 break;
+            case 'category-browser':
+                if (elements.viewCategoryBrowser) elements.viewCategoryBrowser.style.display = 'block';
+                break;
         }
+        // Sync bottom navigation active state
+        if (typeof updateBottomNavActiveTab === 'function') {
+            if (viewName === 'landing') {
+                const activeTab = document.querySelector('.mobile-bottom-nav .nav-item.active');
+                if (!activeTab || activeTab.id !== 'btn-nav-categories') {
+                    updateBottomNavActiveTab('btn-nav-home');
+                }
+            } else if (viewName === 'checkout') {
+                updateBottomNavActiveTab('btn-nav-cart');
+            } else if (viewName === 'category-browser') {
+                updateBottomNavActiveTab('btn-nav-categories');
+            } else {
+                updateBottomNavActiveTab('btn-nav-home');
+            }
+        }
+
         currentView = viewName;
+        updateFloatingCartDock();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
@@ -991,13 +1205,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Weather & Delivery Speed Simulator ---
     function simulateWeatherAndSpeed() {
         const conditions = [
-            { icon: '☀️', text: 'Weather: <strong>Sunny & Clear</strong> • Sourcing riders instantly', speed: 'Lightning Fast (10-15 mins)', color: 'var(--primary)' },
-            { icon: '⛅', text: 'Weather: <strong>Partly Cloudy</strong> • High rider availability', speed: 'Standard (12-18 mins)', color: 'var(--primary)' },
-            { icon: '🌧️', text: 'Weather: <strong>Light Rain Shower</strong> • Drivers moving safely', speed: 'Rain Delay (+5 mins)', color: 'var(--warning)' }
+            { icon: '<i class="fa-solid fa-sun text-warning"></i>', text: 'Weather: <strong>Sunny & Clear</strong> • Sourcing riders instantly', speed: 'Lightning Fast (10-15 mins)', color: 'var(--primary)' },
+            { icon: '<i class="fa-solid fa-cloud-sun text-info"></i>', text: 'Weather: <strong>Partly Cloudy</strong> • High rider availability', speed: 'Standard (12-18 mins)', color: 'var(--primary)' },
+            { icon: '<i class="fa-solid fa-cloud-showers-heavy text-secondary"></i>', text: 'Weather: <strong>Light Rain Shower</strong> • Drivers moving safely', speed: 'Rain Delay (+5 mins)', color: 'var(--warning)' }
         ];
         // Select random mock condition
         const cond = conditions[Math.floor(Math.random() * conditions.length)];
-        elements.weatherIcon.innerText = cond.icon;
+        elements.weatherIcon.innerHTML = cond.icon;
         elements.weatherText.innerHTML = cond.text;
         elements.deliverySpeedText.innerHTML = `Delivery Speed: <strong>${cond.speed}</strong>`;
         elements.weatherBanner.style.borderLeftColor = cond.color;
@@ -1006,31 +1220,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Product Emoji Fallbacks ---
     function getProductEmoji(name, category) {
         const lowerName = name.toLowerCase();
-        if (lowerName.includes('milk')) return '🥛';
-        if (lowerName.includes('yogurt') || lowerName.includes('curd')) return '🥣';
-        if (lowerName.includes('butter')) return '🧈';
-        if (lowerName.includes('paneer') || lowerName.includes('cheese')) return '🧀';
-        if (lowerName.includes('ghee')) return '🛢️';
-        if (lowerName.includes('apple')) return '🍎';
-        if (lowerName.includes('mango')) return '🥭';
-        if (lowerName.includes('banana')) return '🍌';
-        if (lowerName.includes('avocado')) return '🥑';
-        if (lowerName.includes('cucumber')) return '🥒';
-        if (lowerName.includes('tomato')) return '🍅';
-        if (lowerName.includes('spinach')) return '🥬';
-        if (lowerName.includes('sourdough') || lowerName.includes('bread') || lowerName.includes('loaf')) return '🍞';
-        if (lowerName.includes('croissant')) return '🥐';
-        if (lowerName.includes('juice')) return '🥤';
-        if (lowerName.includes('babka') || lowerName.includes('cake')) return '🍰';
+        if (lowerName.includes('milk')) return '<i class="fa-solid fa-glass-water"></i>';
+        if (lowerName.includes('yogurt') || lowerName.includes('curd')) return '<i class="fa-solid fa-bowl-food"></i>';
+        if (lowerName.includes('butter')) return '<i class="fa-solid fa-cubes"></i>';
+        if (lowerName.includes('paneer') || lowerName.includes('cheese')) return '<i class="fa-solid fa-cheese"></i>';
+        if (lowerName.includes('ghee')) return '<i class="fa-solid fa-bottle-droplet"></i>';
+        if (lowerName.includes('apple')) return '<i class="fa-solid fa-apple-whole"></i>';
+        if (lowerName.includes('mango')) return '<i class="fa-solid fa-lemon"></i>';
+        if (lowerName.includes('banana')) return '<i class="fa-solid fa-lemon"></i>';
+        if (lowerName.includes('avocado')) return '<i class="fa-solid fa-seedling"></i>';
+        if (lowerName.includes('cucumber')) return '<i class="fa-solid fa-carrot"></i>';
+        if (lowerName.includes('tomato')) return '<i class="fa-solid fa-seedling"></i>';
+        if (lowerName.includes('spinach')) return '<i class="fa-solid fa-leaf"></i>';
+        if (lowerName.includes('sourdough') || lowerName.includes('bread') || lowerName.includes('loaf')) return '<i class="fa-solid fa-bread-slice"></i>';
+        if (lowerName.includes('croissant')) return '<i class="fa-solid fa-bread-slice"></i>';
+        if (lowerName.includes('juice')) return '<i class="fa-solid fa-wine-glass"></i>';
+        if (lowerName.includes('babka') || lowerName.includes('cake')) return '<i class="fa-solid fa-cake-candles"></i>';
         
         switch (category) {
-            case 'dairy': return '🥛';
-            case 'fruits': return '🍏';
-            case 'veggies': return '🥦';
-            case 'bakery': return '🍞';
-            case 'beverages': return '🍹';
-            case 'pantry': return '🥫';
-            default: return '📦';
+            case 'dairy': return '<i class="fa-solid fa-cow"></i>';
+            case 'fruits': return '<i class="fa-solid fa-apple-whole"></i>';
+            case 'veggies': return '<i class="fa-solid fa-carrot"></i>';
+            case 'bakery': return '<i class="fa-solid fa-bread-slice"></i>';
+            case 'beverages': return '<i class="fa-solid fa-wine-glass"></i>';
+            case 'pantry': return '<i class="fa-solid fa-box"></i>';
+            default: return '<i class="fa-solid fa-box"></i>';
         }
     }
 
@@ -1042,12 +1256,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const card = document.createElement('div');
             card.className = 'glass-card category-card';
             card.innerHTML = `
-                <span class="category-icon">${cat.icon}</span>
+                <span class="category-icon" style="background: transparent; box-shadow: none; display: inline-flex; align-items: center; justify-content: center;"><img src="${cat.image}" alt="${cat.name}" style="width: 64px; height: 64px; object-fit: contain; transition: transform 0.3s ease;"></span>
                 <h3>${cat.name}</h3>
             `;
             card.addEventListener('click', () => {
-                elements.globalSearchInput.value = cat.name;
-                triggerGlobalSearch(cat.id);
+                openCategoryBrowser(cat.id);
             });
             elements.categoryListContainer.appendChild(card);
         });
@@ -1069,7 +1282,7 @@ document.addEventListener('DOMContentLoaded', () => {
             showToast("Removed store from bookmarks.");
         } else {
             favs.push(storeId);
-            showToast("Added store to bookmarks! ❤️", "success");
+            showToast("Added store to bookmarks.", "success");
         }
         localStorage.setItem('luxegrocer_favorites', JSON.stringify(favs));
         renderStores();
@@ -1293,9 +1506,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 ? `<img src="${match.product.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 14px;" alt="${match.product.name}">`
                 : getProductEmoji(match.product.name, match.product.category);
 
-            const badgeHtml = match.product.badgeText 
-                ? `<span class="product-badge-promo">${match.product.badgeText}</span>` 
+            let discountPercent = 0;
+            if (match.product.variants && match.product.variants.length > 0) {
+                const firstVar = match.product.variants[0];
+                if (firstVar && firstVar.originalPrice && firstVar.originalPrice > firstVar.price) {
+                    discountPercent = Math.round(((firstVar.originalPrice - firstVar.price) / firstVar.originalPrice) * 100);
+                }
+            } else if (match.product.originalPrice && match.product.originalPrice > match.product.price) {
+                discountPercent = Math.round(((match.product.originalPrice - match.product.price) / match.product.originalPrice) * 100);
+            }
+            const discountBadgeHtml = discountPercent > 0 
+                ? `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${discountPercent}%</span>`
                 : '';
+            const badgeHtml = discountBadgeHtml || (match.product.badgeText ? `<span class="product-badge-promo">${match.product.badgeText}</span>` : '');
 
             let dietaryHtml = '';
             if (match.product.dietaryType === 'Veg') {
@@ -1304,9 +1527,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
             }
 
-            const priceHtml = match.product.originalPrice 
-                ? `<span class="product-price-slashed">₹${match.product.originalPrice.toFixed(2)}</span>₹${match.product.price.toFixed(2)}` 
-                : `₹${match.product.price.toFixed(2)}`;
+            let priceHtml = `₹${match.product.price.toFixed(2)}`;
+            if (match.product.variants && match.product.variants.length > 0) {
+                const firstVar = match.product.variants[0];
+                if (firstVar) {
+                    priceHtml = firstVar.originalPrice && firstVar.originalPrice > firstVar.price
+                        ? `<span class="product-price-slashed">₹${firstVar.originalPrice.toFixed(2)}</span>₹${firstVar.price.toFixed(2)}`
+                        : `₹${firstVar.price.toFixed(2)}`;
+                }
+            } else {
+                priceHtml = match.product.originalPrice && match.product.originalPrice > match.product.price
+                    ? `<span class="product-price-slashed">₹${match.product.originalPrice.toFixed(2)}</span>₹${match.product.price.toFixed(2)}`
+                    : `₹${match.product.price.toFixed(2)}`;
+            }
             
             let variantSelectorHtml = '';
             if (match.product.variants && match.product.variants.length > 0) {
@@ -1320,7 +1553,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             card.innerHTML = `
-                ${badgeHtml}
+                <div id="search-badge-container-${match.product.id}-${match.store.id}">${badgeHtml}</div>
                 ${dietaryHtml}
                 <div class="compare-emoji">${visualContent}</div>
                 <div class="compare-info">
@@ -1355,8 +1588,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         const priceTag = card.querySelector(`#search-price-tag-${match.product.id}-${match.store.id}`);
                         const unitTag = card.querySelector(`#search-unit-tag-${match.product.id}-${match.store.id}`);
                         const stockTag = card.querySelector(`#search-stock-tag-${match.product.id}-${match.store.id}`);
+                        const badgeContainer = card.querySelector(`#search-badge-container-${match.product.id}-${match.store.id}`);
                         
-                        priceTag.innerText = `₹${variant.price.toFixed(2)}`;
+                        if (variant.originalPrice && variant.originalPrice > variant.price) {
+                            priceTag.innerHTML = `<span class="product-price-slashed">₹${variant.originalPrice.toFixed(2)}</span>₹${variant.price.toFixed(2)}`;
+                            const varDiscountPercent = Math.round(((variant.originalPrice - variant.price) / variant.originalPrice) * 100);
+                            if (badgeContainer) {
+                                badgeContainer.innerHTML = `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${varDiscountPercent}%</span>`;
+                            }
+                        } else {
+                            priceTag.innerHTML = `₹${variant.price.toFixed(2)}`;
+                            if (badgeContainer) {
+                                badgeContainer.innerHTML = match.product.badgeText ? `<span class="product-badge-promo">${match.product.badgeText}</span>` : '';
+                            }
+                        }
                         unitTag.innerText = variant.name;
                         
                         if (variant.stock > 0) {
@@ -1391,6 +1636,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
             elements.searchComparisonContainer.appendChild(card);
         });
+        if (typeof syncProductCardCounters === 'function') {
+            syncProductCardCounters();
+        }
     }
 
     async function loadStoreProfile(storeId) {
@@ -1407,7 +1655,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (isSuspended) {
             warningBannerHtml = `
                 <div class="glass-panel" style="background: rgba(220, 38, 38, 0.08); border: 1.5px solid rgba(220, 38, 38, 0.25); border-radius: 12px; padding: 16px 20px; margin-bottom: 20px; display: flex; align-items: center; gap: 16px; color: #fca5a5; font-size: 0.88rem; line-height: 1.45;">
-                    <span style="font-size: 1.8rem; flex-shrink: 0;">⚠️</span>
+                    <span style="font-size: 1.8rem; flex-shrink: 0; color: var(--danger);"><i class="fa-solid fa-triangle-exclamation"></i></span>
                     <div>
                         <strong>Store Operations Temporarily Suspended:</strong> This storefront is currently offline as the owner's billing plan subscription has expired. Catalog browsing is open, but adding items to cart and placing checkouts are temporarily disabled.
                     </div>
@@ -1466,18 +1714,170 @@ document.addEventListener('DOMContentLoaded', () => {
             const label = catId === 'all' ? 'All Shelf Items' : (catObj ? catObj.name : catId);
             const tab = document.createElement('button');
             tab.className = `nav-tab ${catId === activeCategoryFilter ? 'active' : ''}`;
+            tab.dataset.categoryId = catId;
             tab.innerText = label;
             tab.addEventListener('click', () => {
-                document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                activeCategoryFilter = catId;
-                renderStoreProducts();
+                selectStoreCategory(catId);
             });
             elements.storeCategoryTabs.appendChild(tab);
         });
 
         renderStoreProducts();
         await switchView('store-profile');
+    }
+
+    function selectStoreCategory(catId) {
+        activeCategoryFilter = catId;
+        const tabs = elements.storeCategoryTabs.querySelectorAll('.nav-tab');
+        tabs.forEach(tab => {
+            if (tab.dataset.categoryId === catId) {
+                tab.classList.add('active');
+                tab.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+            } else {
+                tab.classList.remove('active');
+            }
+        });
+        renderStoreProducts();
+    }
+
+    function createProductCard(prod) {
+        const card = document.createElement('div');
+        card.className = 'glass-card product-card';
+        card.style.position = 'relative';
+        
+        const emoji = getProductEmoji(prod.name, prod.category);
+        const hasImage = prod.image && prod.image.trim() !== '';
+        const visualContent = hasImage 
+            ? `<img src="${prod.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;" alt="${prod.name}">`
+            : emoji;
+
+        let discountPercent = 0;
+        if (prod.variants && prod.variants.length > 0) {
+            const firstVar = prod.variants[0];
+            if (firstVar && firstVar.originalPrice && firstVar.originalPrice > firstVar.price) {
+                discountPercent = Math.round(((firstVar.originalPrice - firstVar.price) / firstVar.originalPrice) * 100);
+            }
+        } else if (prod.originalPrice && prod.originalPrice > prod.price) {
+            discountPercent = Math.round(((prod.originalPrice - prod.price) / prod.originalPrice) * 100);
+        }
+        const discountBadgeHtml = discountPercent > 0 
+            ? `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${discountPercent}%</span>`
+            : '';
+        const badgeHtml = discountBadgeHtml || (prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '');
+
+        let dietaryHtml = '';
+        if (prod.dietaryType === 'Veg') {
+            dietaryHtml = `<span class="dietary-badge veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
+        } else if (prod.dietaryType === 'Non-Veg') {
+            dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
+        }
+
+        let priceHtml = `₹${prod.price.toFixed(2)}`;
+        if (prod.variants && prod.variants.length > 0) {
+            const firstVar = prod.variants[0];
+            if (firstVar) {
+                priceHtml = firstVar.originalPrice && firstVar.originalPrice > firstVar.price
+                    ? `<span class="product-price-slashed">₹${firstVar.originalPrice.toFixed(2)}</span>₹${firstVar.price.toFixed(2)}`
+                    : `₹${firstVar.price.toFixed(2)}`;
+            }
+        } else {
+            priceHtml = prod.originalPrice && prod.originalPrice > prod.price
+                ? `<span class="product-price-slashed">₹${prod.originalPrice.toFixed(2)}</span>₹${prod.price.toFixed(2)}`
+                : `₹${prod.price.toFixed(2)}`;
+        }
+        
+        const isClosed = activeStore && activeStore.status === 'Closed';
+        const isSuspended = activeStore && (activeStore.status === 'Suspended' || (activeStore.subscription && activeStore.subscription.status === 'Suspended'));
+        
+        let variantSelectorHtml = '';
+        if (prod.variants && prod.variants.length > 0) {
+            variantSelectorHtml = `
+                <div class="product-variant-selector" style="margin-top: 8px;">
+                    <select class="variant-select glass-input" style="width: 100%; padding: 4px 8px; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white;">
+                        ${prod.variants.map(v => `<option value="${v.id}">${v.name} - ₹${v.price.toFixed(2)}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        }
+
+        card.innerHTML = `
+            <div class="product-card-top" style="cursor: pointer;">
+                <div id="badge-container-${prod.id}">${badgeHtml}</div>
+                ${dietaryHtml}
+                <div class="product-emoji-container">${visualContent}</div>
+                <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}" id="stock-tag-${prod.id}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
+                <button class="btn-premium btn-add-cart" data-store-id="${activeStore ? activeStore.id : ''}" data-product-id="${prod.id}" ${prod.stock === 0 || isClosed || isSuspended ? 'disabled' : ''}>
+                    ${isSuspended ? 'Suspended' : (isClosed ? 'Closed' : 'ADD')}
+                </button>
+            </div>
+            <div class="product-info">
+                <div class="product-unit" id="unit-tag-${prod.id}">${prod.unit}</div>
+                <h3>${prod.name}</h3>
+                <p class="product-desc">${prod.desc || 'Fresh item sourced locally.'}</p>
+                ${variantSelectorHtml}
+            </div>
+            <div class="product-footer">
+                <div class="product-price" id="price-tag-${prod.id}">${priceHtml}</div>
+            </div>
+        `;
+
+        card.querySelector('.product-card-top').addEventListener('click', (e) => {
+            if (e.target.closest('.btn-add-cart') || e.target.closest('.btn-counter-container')) return;
+            openProductDetailsModal(prod, activeStore);
+        });
+
+        if (prod.variants && prod.variants.length > 0) {
+            const selectEl = card.querySelector('.variant-select');
+            const updateCardUI = () => {
+                const selectedId = selectEl.value;
+                const variant = prod.variants.find(v => v.id === selectedId);
+                if (variant) {
+                    const priceTag = card.querySelector(`#price-tag-${prod.id}`);
+                    const unitTag = card.querySelector(`#unit-tag-${prod.id}`);
+                    const stockTag = card.querySelector(`#stock-tag-${prod.id}`);
+                    const badgeContainer = card.querySelector(`#badge-container-${prod.id}`);
+                    
+                    if (variant.originalPrice && variant.originalPrice > variant.price) {
+                        priceTag.innerHTML = `<span class="product-price-slashed">₹${variant.originalPrice.toFixed(2)}</span>₹${variant.price.toFixed(2)}`;
+                        const varDiscountPercent = Math.round(((variant.originalPrice - variant.price) / variant.originalPrice) * 100);
+                        if (badgeContainer) {
+                            badgeContainer.innerHTML = `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${varDiscountPercent}%</span>`;
+                        }
+                    } else {
+                        priceTag.innerHTML = `₹${variant.price.toFixed(2)}`;
+                        if (badgeContainer) {
+                            badgeContainer.innerHTML = prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '';
+                        }
+                    }
+                    
+                    unitTag.innerText = variant.name;
+                    
+                    if (variant.stock > 0) {
+                        stockTag.className = 'product-stock-tag in-stock';
+                        stockTag.innerText = 'In Stock';
+                        card.querySelector('.btn-add-cart').disabled = isClosed;
+                    } else {
+                        stockTag.className = 'product-stock-tag out-stock';
+                        stockTag.innerText = 'Out of Stock';
+                        card.querySelector('.btn-add-cart').disabled = true;
+                    }
+                }
+            };
+            selectEl.addEventListener('change', updateCardUI);
+            // Run initially to set first variant
+            updateCardUI();
+        }
+
+        card.querySelector('.btn-add-cart').addEventListener('click', async (e) => {
+            let selectedVariant = null;
+            if (prod.variants && prod.variants.length > 0) {
+                const selectedId = card.querySelector('.variant-select').value;
+                selectedVariant = prod.variants.find(v => v.id === selectedId);
+            }
+            await addToCart(activeStore.id, prod, selectedVariant, e);
+        });
+
+        return card;
     }
 
     function renderStoreProducts() {
@@ -1487,9 +1887,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const searchVal = elements.storeLocalSearch.value.trim().toLowerCase();
         let products = activeStore.products;
 
-        if (activeCategoryFilter !== 'all') {
-            products = products.filter(p => p.category === activeCategoryFilter);
-        }
         if (searchVal) {
             products = products.filter(p => p.name.toLowerCase().includes(searchVal) || p.desc.toLowerCase().includes(searchVal));
         }
@@ -1497,117 +1894,88 @@ document.addEventListener('DOMContentLoaded', () => {
             products = products.filter(p => p.dietaryType === 'Veg');
         }
 
-        if (products.length === 0) {
-            elements.storeProductsContainer.innerHTML = `
-                <div class="glass-panel" style="padding: 40px; grid-column: span 3; text-align: center; color: var(--text-muted);">
-                    <i class="fa-solid fa-bag-shopping" style="font-size: 3rem; margin-bottom: 16px; color: var(--primary);"></i>
-                    <h3>No products match selection in this store.</h3>
-                </div>
-            `;
-            return;
-        }
+        const showMultiShelf = activeCategoryFilter === 'all' && !searchVal;
 
-        products.forEach(prod => {
-            const card = document.createElement('div');
-            card.className = 'glass-card product-card';
-            card.style.position = 'relative';
-            
-            const emoji = getProductEmoji(prod.name, prod.category);
-            const hasImage = prod.image && prod.image.trim() !== '';
-            const visualContent = hasImage 
-                ? `<img src="${prod.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;" alt="${prod.name}">`
-                : emoji;
+        if (showMultiShelf) {
+            elements.storeProductsContainer.classList.remove('products-grid');
+            elements.storeProductsContainer.classList.add('shelves-container');
 
-            const badgeHtml = prod.badgeText 
-                ? `<span class="product-badge-promo">${prod.badgeText}</span>` 
-                : '';
+            const storeCategories = [...new Set(products.map(p => p.category))];
+            let renderedShelvesCount = 0;
 
-            let dietaryHtml = '';
-            if (prod.dietaryType === 'Veg') {
-                dietaryHtml = `<span class="dietary-badge veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
-            } else if (prod.dietaryType === 'Non-Veg') {
-                dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
-            }
+            CATEGORIES.forEach(cat => {
+                if (!storeCategories.includes(cat.id)) return;
 
-            const priceHtml = prod.originalPrice 
-                ? `<span class="product-price-slashed">₹${prod.originalPrice.toFixed(2)}</span>₹${prod.price.toFixed(2)}` 
-                : `₹${prod.price.toFixed(2)}`;
-            
-            const isClosed = activeStore && activeStore.status === 'Closed';
-            const isSuspended = activeStore && (activeStore.status === 'Suspended' || (activeStore.subscription && activeStore.subscription.status === 'Suspended'));
-            
-            let variantSelectorHtml = '';
-            if (prod.variants && prod.variants.length > 0) {
-                variantSelectorHtml = `
-                    <div class="product-variant-selector" style="margin-top: 8px;">
-                        <select class="variant-select glass-input" style="width: 100%; padding: 4px 8px; font-size: 0.8rem; border-radius: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white;">
-                            ${prod.variants.map(v => `<option value="${v.id}">${v.name} - ₹${v.price.toFixed(2)}</option>`).join('')}
-                        </select>
+                const catProducts = products.filter(p => p.category === cat.id);
+                if (catProducts.length === 0) return;
+
+                renderedShelvesCount++;
+
+                const shelf = document.createElement('div');
+                shelf.className = 'category-shelf';
+
+                const header = document.createElement('div');
+                header.className = 'shelf-header';
+                header.innerHTML = `
+                    <h3 style="display: flex; align-items: center; gap: 8px;"><img src="${cat.image}" style="width: 24px; height: 24px; object-fit: contain;"> ${cat.name}</h3>
+                    <button class="btn-see-all">See All <i class="fa-solid fa-arrow-right"></i></button>
+                `;
+
+                const switchFilter = () => {
+                    selectStoreCategory(cat.id);
+                };
+                header.querySelector('h3').style.cursor = 'pointer';
+                header.querySelector('h3').addEventListener('click', switchFilter);
+                header.querySelector('.btn-see-all').addEventListener('click', switchFilter);
+
+                const carousel = document.createElement('div');
+                carousel.className = 'shelf-carousel';
+
+                catProducts.forEach(prod => {
+                    const card = createProductCard(prod);
+                    carousel.appendChild(card);
+                });
+
+                shelf.appendChild(header);
+                shelf.appendChild(carousel);
+                elements.storeProductsContainer.appendChild(shelf);
+            });
+
+            if (renderedShelvesCount === 0) {
+                elements.storeProductsContainer.innerHTML = `
+                    <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--text-muted); width: 100%;">
+                        <i class="fa-solid fa-bag-shopping" style="font-size: 3rem; margin-bottom: 16px; color: var(--primary);"></i>
+                        <h3>No products match selection in this store.</h3>
                     </div>
                 `;
             }
+        } else {
+            elements.storeProductsContainer.classList.remove('shelves-container');
+            elements.storeProductsContainer.classList.add('products-grid');
 
-            card.innerHTML = `
-                ${badgeHtml}
-                ${dietaryHtml}
-                <div class="product-card-top">
-                    <div class="product-emoji-container">${visualContent}</div>
-                    <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}" id="stock-tag-${prod.id}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
-                </div>
-                <div class="product-info">
-                    <h3>${prod.name}</h3>
-                    <div class="product-unit" id="unit-tag-${prod.id}">${prod.unit}</div>
-                    <p class="product-desc">${prod.desc || 'Fresh item sourced locally.'}</p>
-                    ${variantSelectorHtml}
-                </div>
-                <div class="product-footer">
-                    <div class="product-price" id="price-tag-${prod.id}">${priceHtml}</div>
-                    <button class="btn-premium btn-add-cart" ${prod.stock === 0 || isClosed || isSuspended ? 'disabled' : ''}>
-                        ${isSuspended ? 'Suspended' : (isClosed ? 'Closed' : '<i class="fa-solid fa-cart-plus"></i> Add')}
-                    </button>
-                </div>
-            `;
-
-            if (prod.variants && prod.variants.length > 0) {
-                const selectEl = card.querySelector('.variant-select');
-                const updateCardUI = () => {
-                    const selectedId = selectEl.value;
-                    const variant = prod.variants.find(v => v.id === selectedId);
-                    if (variant) {
-                        const priceTag = card.querySelector(`#price-tag-${prod.id}`);
-                        const unitTag = card.querySelector(`#unit-tag-${prod.id}`);
-                        const stockTag = card.querySelector(`#stock-tag-${prod.id}`);
-                        
-                        priceTag.innerText = `₹${variant.price.toFixed(2)}`;
-                        unitTag.innerText = variant.name;
-                        
-                        if (variant.stock > 0) {
-                            stockTag.className = 'product-stock-tag in-stock';
-                            stockTag.innerText = 'In Stock';
-                            card.querySelector('.btn-add-cart').disabled = isClosed;
-                        } else {
-                            stockTag.className = 'product-stock-tag out-stock';
-                            stockTag.innerText = 'Out of Stock';
-                            card.querySelector('.btn-add-cart').disabled = true;
-                        }
-                    }
-                };
-                selectEl.addEventListener('change', updateCardUI);
-                // Run initially to set first variant
-                updateCardUI();
+            let filteredProducts = products;
+            if (activeCategoryFilter !== 'all') {
+                filteredProducts = filteredProducts.filter(p => p.category === activeCategoryFilter);
             }
 
-            card.querySelector('.btn-add-cart').addEventListener('click', async (e) => {
-                let selectedVariant = null;
-                if (prod.variants && prod.variants.length > 0) {
-                    const selectedId = card.querySelector('.variant-select').value;
-                    selectedVariant = prod.variants.find(v => v.id === selectedId);
-                }
-                await addToCart(activeStore.id, prod, selectedVariant, e);
-            });
+            if (filteredProducts.length === 0) {
+                elements.storeProductsContainer.innerHTML = `
+                    <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--text-muted); width: 100%;">
+                        <i class="fa-solid fa-bag-shopping" style="font-size: 3rem; margin-bottom: 16px; color: var(--primary);"></i>
+                        <h3>No products match selection in this store.</h3>
+                    </div>
+                `;
+                return;
+            }
 
-            elements.storeProductsContainer.appendChild(card);
-        });
+            filteredProducts.forEach(prod => {
+                const card = createProductCard(prod);
+                elements.storeProductsContainer.appendChild(card);
+            });
+        }
+        if (typeof syncProductCardCounters === 'function') {
+            syncProductCardCounters();
+        }
     }
 
     // --- Fly-To-Cart Particle Animation ---
@@ -1717,6 +2085,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function saveCartToStorage() {
         localStorage.setItem('luxegrocer_cart', JSON.stringify(cart));
+        if (db.token) {
+            db.saveCart(cart).catch(err => console.error("Error syncing cart to DB:", err));
+        }
     }
 
     function loadCartFromStorage() {
@@ -1727,13 +2098,27 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
+    function clearLocalCart() {
+        cart = [];
+        localStorage.removeItem('luxegrocer_cart');
+        updateCartBadge();
+        renderCart().catch(err => console.error("Error rendering cart during logout:", err));
+    }
+
     function updateCartBadge() {
         const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
         if (totalQty > 0) {
             elements.cartBadge.innerText = totalQty;
             elements.cartBadge.style.display = 'flex';
+            if (elements.navCartBadge) {
+                elements.navCartBadge.innerText = totalQty;
+                elements.navCartBadge.style.display = 'flex';
+            }
         } else {
             elements.cartBadge.style.display = 'none';
+            if (elements.navCartBadge) {
+                elements.navCartBadge.style.display = 'none';
+            }
         }
     }
 
@@ -1774,7 +2159,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (cart.length === 0) {
             elements.cartItemsWrapper.innerHTML = `
                 <div style="text-align: center; margin-top: 100px; color: var(--text-muted);">
-                    <span style="font-size: 4rem; display: block; margin-bottom: 16px;">🛍️</span>
+                    <span style="font-size: 4.5rem; display: block; margin-bottom: 16px; color: var(--text-muted);"><i class="fa-solid fa-bag-shopping"></i></span>
                     <h3>Your cart is empty</h3>
                     <p style="margin-top: 8px;">Explore grocery stores to add fresh items.</p>
                 </div>
@@ -1870,7 +2255,7 @@ document.addEventListener('DOMContentLoaded', () => {
         // Compute dynamic free delivery indicator progress
         const FREE_DELIVERY_THRESHOLD = 300;
         if (subtotal >= FREE_DELIVERY_THRESHOLD) {
-            elements.savingsValue.innerText = "UNLOCKED! 🎉";
+            elements.savingsValue.innerText = "UNLOCKED!";
             elements.savingsValue.style.color = "var(--primary)";
             elements.savingsProgressBar.style.width = "100%";
             elements.savingsMsg.innerHTML = "You saved delivery fees! Enjoy <strong>FREE store-to-door delivery</strong>.";
@@ -1971,6 +2356,12 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         } else {
             elements.cartUpsellBox.style.display = 'none';
+        }
+        if (typeof syncProductCardCounters === 'function') {
+            syncProductCardCounters();
+        }
+        if (typeof updateFloatingCartDock === 'function') {
+            updateFloatingCartDock();
         }
     }
 
@@ -2442,9 +2833,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const prop = freshOrder.substitutionProposal;
         if (prop && prop.status === 'Pending') {
             const originalItem = freshOrder.items.find(i => i.id === prop.originalItemId) || { name: 'Item', quantity: 1 };
+            const suggIcon = getProductEmoji(prop.suggestedProduct.name, prop.suggestedProduct.category);
             elements.trackerSubstitutionText.innerHTML = `
                 Store owner proposed swapping out-of-stock <strong>${originalItem.name}</strong> 
-                with <strong>${prop.suggestedProduct.name}</strong> (${prop.suggestedProduct.emoji || '📦'}) for the same quantity. 
+                with <strong>${prop.suggestedProduct.name}</strong> (${suggIcon}) for the same quantity. 
                 <br><span style="font-size:0.75rem; color:var(--text-muted); margin-top:4px; display:block;">
                 Suggested product price: <strong>₹${prop.suggestedProduct.price.toFixed(2)}</strong> (vs original ₹${originalItem.price.toFixed(2)})
                 </span>
@@ -2538,7 +2930,7 @@ document.addEventListener('DOMContentLoaded', () => {
         shopMarker.style.left = `${storePt.x}%`;
         shopMarker.style.top = `${storePt.y}%`;
         shopMarker.innerHTML = `
-            <div class="map-label" style="min-width:100px;">🏠 ${trackingOrder.storeName}</div>
+            <div class="map-label" style="min-width:100px;"><i class="fa-solid fa-house"></i> ${trackingOrder.storeName}</div>
         `;
         elements.trackerMapFrame.appendChild(shopMarker);
 
@@ -2548,7 +2940,7 @@ document.addEventListener('DOMContentLoaded', () => {
         homeMarker.style.left = `${homePt.x}%`;
         homeMarker.style.top = `${homePt.y}%`;
         homeMarker.innerHTML = `
-            <div class="map-label">📍 Your Home</div>
+            <div class="map-label"><i class="fa-solid fa-location-pin"></i> Your Home</div>
         `;
         elements.trackerMapFrame.appendChild(homeMarker);
 
@@ -2578,7 +2970,7 @@ document.addEventListener('DOMContentLoaded', () => {
         riderMarker.style.left = `${startX}%`;
         riderMarker.style.top = `${startY}%`;
         riderMarker.innerHTML = `
-            <div class="map-label" style="background:var(--accent); border-color:var(--accent);">🛵 Direct Rider</div>
+            <div class="map-label" style="background:var(--accent); border-color:var(--accent);"><i class="fa-solid fa-motorcycle"></i> Direct Rider</div>
         `;
         elements.trackerMapFrame.appendChild(riderMarker);
     }
@@ -2615,7 +3007,7 @@ document.addEventListener('DOMContentLoaded', () => {
         ctx.font = 'bold 18px sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText('Scratch Here! 🎁', width / 2, height / 2);
+        ctx.fillText('Scratch Here!', width / 2, height / 2);
         
         let isDrawing = false;
         ctx.globalCompositeOperation = 'destination-out';
@@ -2747,7 +3139,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Server-Sent Events (SSE) Sync ---
-    const sse = new EventSource('http://localhost:5000/api/sync');
+    const sse = new EventSource(`${BACKEND_URL}/api/sync`);
     sse.onmessage = async (e) => {
         try {
             const { event, data } = JSON.parse(e.data);
@@ -2769,6 +3161,14 @@ document.addEventListener('DOMContentLoaded', () => {
                         }
                         if (fresh.status === 'Delivered' && !scratchCardClaimed) {
                             handleOrderDelivered(fresh);
+                        }
+                        if (fresh.status === 'Cancelled' && prevStatus !== 'Cancelled') {
+                            showToast(`Order #${fresh.id} has been cancelled.`, 'error');
+                            alert(`Order #${fresh.id} has been automatically cancelled.\nReason: ${fresh.cancellationReason || 'Delivery exceeded expected window.'}\n\nRefund of ₹${(fresh.subtotal + fresh.deliveryFee - fresh.discount).toFixed(2)} has been credited to your payment source.`);
+                            trackingOrder = null;
+                            setTimeout(async () => {
+                                await switchView('landing');
+                            }, 1000);
                         }
                     }
                 }
@@ -2834,12 +3234,12 @@ document.addEventListener('DOMContentLoaded', () => {
         card.style.transition = 'all 0.4s ease-out';
         
         const isEmail = message.startsWith('Email');
-        const icon = isEmail ? '📧' : '📱';
+        const icon = isEmail ? '<i class="fa-solid fa-envelope" style="color: var(--secondary);"></i>' : '<i class="fa-solid fa-mobile-screen-button" style="color: var(--secondary);"></i>';
         const title = isEmail ? 'Simulated Email Sent' : 'Simulated SMS Sent';
         
         card.innerHTML = `
             <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div style="font-size: 1.5rem; background: rgba(20, 184, 166, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(20, 184, 166, 0.2);">${icon}</div>
+                <div style="font-size: 1.2rem; background: rgba(20, 184, 166, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(20, 184, 166, 0.2); display: flex; align-items: center; justify-content: center;">${icon}</div>
                 <div style="flex-grow: 1;">
                     <strong style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 4px;">${title}</strong>
                     <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0; line-height: 1.4;">${message}</p>
@@ -2926,6 +3326,97 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.cartDrawerElement.classList.remove('active');
     });
 
+    // --- Mobile Bottom Navigation Event Listeners & State Helpers ---
+    function updateBottomNavActiveTab(tabId) {
+        const navItems = document.querySelectorAll('.mobile-bottom-nav .nav-item');
+        navItems.forEach(item => {
+            if (item.id === tabId) {
+                item.classList.add('active');
+            } else {
+                item.classList.remove('active');
+            }
+        });
+    }
+
+    if (elements.btnNavHome) {
+        elements.btnNavHome.addEventListener('click', async () => {
+            updateBottomNavActiveTab('btn-nav-home');
+            await switchView('landing');
+        });
+    }
+
+    if (elements.btnNavCategories) {
+        elements.btnNavCategories.addEventListener('click', async () => {
+            await openCategoryBrowser('dairy');
+        });
+    }
+
+    if (elements.btnNavReorder) {
+        elements.btnNavReorder.addEventListener('click', () => {
+            updateBottomNavActiveTab('btn-nav-reorder');
+            if (!db.token) {
+                showToast("Please login to view your order history.", "info");
+                toggleAuthModal(true);
+                return;
+            }
+            elements.accountOverlayElement.classList.add('active');
+            elements.accountDrawerElement.classList.add('active');
+            showAccountTab('history');
+        });
+    }
+
+    if (elements.btnNavCart) {
+        elements.btnNavCart.addEventListener('click', async () => {
+            updateBottomNavActiveTab('btn-nav-cart');
+            await renderCart();
+            elements.cartOverlayElement.classList.add('active');
+            elements.cartDrawerElement.classList.add('active');
+        });
+    }
+
+    // --- Homepage Hero Mission Popup Toggle & Auto-Close Timer ---
+    let missionTimeout = null;
+    function openMissionModal() {
+        if (elements.modalMissionInfo) {
+            elements.modalMissionInfo.style.display = 'flex';
+            
+            // Auto close after 5 seconds
+            if (missionTimeout) clearTimeout(missionTimeout);
+            missionTimeout = setTimeout(() => {
+                closeMissionModal();
+            }, 5000);
+        }
+    }
+
+    function closeMissionModal() {
+        if (elements.modalMissionInfo) {
+            elements.modalMissionInfo.style.display = 'none';
+        }
+        if (missionTimeout) clearTimeout(missionTimeout);
+    }
+
+    if (elements.heroTitleClickable) {
+        elements.heroTitleClickable.addEventListener('click', () => {
+            if (window.innerWidth <= 600) {
+                openMissionModal();
+            }
+        });
+    }
+
+    if (elements.btnCloseMissionModal) {
+        elements.btnCloseMissionModal.addEventListener('click', () => {
+            closeMissionModal();
+        });
+    }
+
+    if (elements.modalMissionInfo) {
+        elements.modalMissionInfo.addEventListener('click', (e) => {
+            if (e.target === elements.modalMissionInfo) {
+                closeMissionModal();
+            }
+        });
+    }
+
     elements.btnGlobalSearch.addEventListener('click', () => triggerGlobalSearch());
     elements.globalSearchInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') triggerGlobalSearch();
@@ -3009,6 +3500,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.locLat.value = userLoc.lat;
         elements.locLng.value = userLoc.lng;
         elements.modalLocationElement.classList.add('active');
+        initLocationSimulationMap(parseFloat(userLoc.lat) || 12.9250, parseFloat(userLoc.lng) || 77.6220);
     });
 
     elements.btnCloseLocationModal.addEventListener('click', () => elements.modalLocationElement.classList.remove('active'));
@@ -3080,6 +3572,7 @@ document.addEventListener('DOMContentLoaded', () => {
     elements.btnAuthTrigger.addEventListener('click', async () => {
         if (db.token) {
             db.logout();
+            clearLocalCart();
             showToast("Logged out successfully.");
             await initAuth();
             if (currentView === 'checkout') {
@@ -3563,6 +4056,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.accountAddressLat.value = 12.9100;
         elements.accountAddressLng.value = 77.6400;
         elements.accountAddressDetail.value = 'Sector 3, HSR Layout, Bengaluru';
+        initAccountAddressMap(12.9100, 77.6400);
     });
 
     elements.btnCancelAddressForm.addEventListener('click', () => {
@@ -3574,16 +4068,19 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.accountAddressLat.value = 12.9100;
         elements.accountAddressLng.value = 77.6400;
         elements.accountAddressDetail.value = 'Sector 3, HSR Layout, Bengaluru, Karnataka';
+        initAccountAddressMap(12.9100, 77.6400);
     });
     elements.btnAddrPresetK.addEventListener('click', () => {
         elements.accountAddressLat.value = 12.9250;
         elements.accountAddressLng.value = 77.6220;
         elements.accountAddressDetail.value = '4th Block, Koramangala, Bengaluru, Karnataka';
+        initAccountAddressMap(12.9250, 77.6220);
     });
     elements.btnAddrPresetI.addEventListener('click', () => {
         elements.accountAddressLat.value = 12.9719;
         elements.accountAddressLng.value = 77.6412;
         elements.accountAddressDetail.value = '100 Feet Road, Indiranagar, Bengaluru, Karnataka';
+        initAccountAddressMap(12.9719, 77.6412);
     });
 
     // Address form submit
@@ -3649,6 +4146,7 @@ document.addEventListener('DOMContentLoaded', () => {
         elements.accountOverlayElement.classList.remove('active');
         elements.accountDrawerElement.classList.remove('active');
         db.logout();
+        clearLocalCart();
         showToast("Signed out successfully.");
         await initAuth();
         await switchView('landing');
@@ -3919,7 +4417,7 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             
             try {
-                const res = await fetch(`http://localhost:5000/api/orders/${activeTipOrderId}/tip`, {
+                const res = await fetch(`${BACKEND_URL}/api/orders/${activeTipOrderId}/tip`, {
                     method: 'POST',
                     headers: db.getHeaders(),
                     body: JSON.stringify({ tip: selectedPostTipAmount })
@@ -4065,6 +4563,977 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
+    // --- Instamart/Blinkit Quick-Commerce Additions ---
+    
+    let catFilterVegOnly = false;
+    let catSortOrder = 'price-asc';
+
+    // 1. Sync Product Card Counters
+    async function syncProductCardCounters() {
+        const cards = document.querySelectorAll('.product-card, .comparison-card');
+        cards.forEach(card => {
+            const addBtn = card.querySelector('.btn-add-cart');
+            const counterContainer = card.querySelector('.btn-counter-container');
+            if (!addBtn && !counterContainer) return;
+            
+            let productId = (addBtn ? addBtn.dataset.productId : null) || (counterContainer ? counterContainer.dataset.productId : null);
+            let storeId = (addBtn ? addBtn.dataset.storeId : null) || (counterContainer ? counterContainer.dataset.storeId : null) || (activeStore ? activeStore.id : null);
+            
+            if (!productId || !storeId) return;
+            
+            // Resolve variant if variant selector exists
+            const selectEl = card.querySelector('.variant-select');
+            const variantId = selectEl ? selectEl.value : null;
+            const itemId = variantId ? `${productId}-${variantId}` : productId;
+            
+            const cartItem = cart.find(item => item.id === itemId && item.storeId === storeId);
+            const quantity = cartItem ? cartItem.quantity : 0;
+            
+            let targetEl = addBtn || counterContainer;
+            const parent = targetEl.parentElement;
+            
+            if (quantity > 0) {
+                // If it is already a counter, just update its value
+                if (counterContainer) {
+                    const valSpan = counterContainer.querySelector('.btn-counter-val');
+                    if (valSpan) valSpan.innerText = quantity;
+                    return;
+                }
+                
+                // Otherwise replace button with counter container
+                const counter = document.createElement('div');
+                counter.className = 'btn-counter-container';
+                counter.dataset.productId = productId;
+                counter.dataset.storeId = storeId;
+                if (variantId) counter.dataset.variantId = variantId;
+                
+                counter.innerHTML = `
+                    <button class="btn-counter-btn btn-counter-dec" type="button"><i class="fa-solid fa-minus"></i></button>
+                    <span class="btn-counter-val">${quantity}</span>
+                    <button class="btn-counter-btn btn-counter-inc" type="button"><i class="fa-solid fa-plus"></i></button>
+                `;
+                
+                counter.querySelector('.btn-counter-dec').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    await updateQuantity(itemId, 'decrease');
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                });
+                
+                counter.querySelector('.btn-counter-inc').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    await updateQuantity(itemId, 'increase');
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                });
+                
+                parent.replaceChild(counter, targetEl);
+            } else {
+                // If it is a counter container, replace it back with an ADD button
+                if (addBtn) return; // already ADD button
+                
+                const add = document.createElement('button');
+                add.className = 'btn-premium btn-add-cart';
+                add.dataset.productId = productId;
+                add.dataset.storeId = storeId;
+                add.style.cssText = 'background: var(--bg-card); color: var(--primary); border: 1.5px solid var(--primary); font-size: 0.82rem; padding: 6px 14px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px var(--primary-glow);';
+                add.innerHTML = 'ADD';
+                
+                add.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    e.preventDefault();
+                    
+                    let prod = null;
+                    if (activeStore && activeStore.id === storeId) {
+                        prod = activeStore.products.find(p => p.id === productId);
+                    } else {
+                        // retrieve from dataset or lookup
+                        if (card.dataset.productObject) {
+                            try {
+                                prod = JSON.parse(card.dataset.productObject);
+                            } catch(err) {}
+                        }
+                        if (!prod) {
+                            const allStores = await db.getStores();
+                            const matchingStore = allStores.find(s => s.id === storeId);
+                            if (matchingStore) {
+                                prod = matchingStore.products.find(p => p.id === productId);
+                            }
+                        }
+                    }
+                    
+                    if (prod) {
+                        let selectedVariant = null;
+                        if (variantId) {
+                            selectedVariant = prod.variants.find(v => v.id === variantId);
+                        }
+                        await addToCart(storeId, prod, selectedVariant, e);
+                        syncProductCardCounters();
+                        updateFloatingCartDock();
+                    }
+                });
+                
+                parent.replaceChild(add, targetEl);
+            }
+        });
+        
+        // Keep detailed modal comparison list controls synced in real time
+        if (activeDetailStore && elements.modalProductDetail && elements.modalProductDetail.style.display === 'flex') {
+            syncCompareStoreButtons(activeDetailStore);
+        }
+    }
+
+    // 2. Update Floating Cart Dock
+    function updateFloatingCartDock() {
+        const dock = elements.floatingCartDock;
+        if (!dock) return;
+        
+        if (cart.length === 0 || currentView === 'checkout' || currentView === 'order-tracker') {
+            dock.style.display = 'none';
+            return;
+        }
+        
+        dock.style.display = 'block';
+        
+        const totalQty = cart.reduce((sum, item) => sum + item.quantity, 0);
+        const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        elements.dockCartCount.innerText = `${totalQty} Item${totalQty > 1 ? 's' : ''}`;
+        elements.dockCartTotal.innerText = `₹${subtotal.toFixed(2)}`;
+        
+        if (subtotal >= 300) {
+            elements.dockProgressText.innerHTML = `🎉 <strong style="color: #10b981;">Yay! Free Delivery Unlocked!</strong>`;
+            elements.dockProgressBarVal.style.width = '100%';
+        } else {
+            const remaining = 300 - subtotal;
+            elements.dockProgressText.innerHTML = `Add <strong>₹${remaining.toFixed(2)}</strong> more for <strong>FREE Delivery</strong>`;
+            const percent = Math.min((subtotal / 300) * 100, 100);
+            elements.dockProgressBarVal.style.width = `${percent}%`;
+        }
+    }
+
+    // 3. Open Categories Split Screen Browser
+    async function openCategoryBrowser(categoryId = 'dairy') {
+        await switchView('category-browser');
+        
+        // Render Sidebar
+        elements.catBrowserSidebar.innerHTML = '';
+        CATEGORIES.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = `cat-sidebar-btn ${cat.id === categoryId ? 'active' : ''}`;
+            btn.dataset.categoryId = cat.id;
+            btn.innerHTML = `<img src="${cat.image}" style="width: 24px; height: 24px; object-fit: contain; margin-right: 8px;"> <span>${cat.name.split(' & ')[0]}</span>`;
+            
+            btn.addEventListener('click', async () => {
+                elements.catBrowserSidebar.querySelectorAll('.cat-sidebar-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                await renderCategoryBrowserProducts(cat.id);
+            });
+            
+            elements.catBrowserSidebar.appendChild(btn);
+        });
+        
+        await renderCategoryBrowserProducts(categoryId);
+    }
+
+    // 4. Render Split categories product grid
+    async function renderCategoryBrowserProducts(categoryId) {
+        elements.catBrowserProductsContainer.innerHTML = '<div style="grid-column:1/-1; text-align:center; padding:40px;"><i class="fa-solid fa-rotate spin" style="font-size:2rem; color:var(--primary);"></i><p style="margin-top:10px;">Finding fresh goods...</p></div>';
+        elements.catBrowserOutOfStockContainer.innerHTML = '';
+        elements.catBrowserOutOfStockSection.style.display = 'none';
+        
+        const stores = await db.getStores();
+        let matches = [];
+        
+        stores.forEach(store => {
+            if (store.status === 'Suspended') return;
+            store.products.forEach(prod => {
+                if (prod.category === categoryId) {
+                    matches.push({ product: prod, store });
+                }
+            });
+        });
+        
+        // Filter Veg Only
+        if (catFilterVegOnly) {
+            matches = matches.filter(m => m.product.dietaryType === 'Veg');
+        }
+        
+        // Sort Order
+        if (catSortOrder === 'price-asc') {
+            matches.sort((a, b) => a.product.price - b.product.price);
+        } else if (catSortOrder === 'rating') {
+            matches.sort((a, b) => b.product.rating - a.product.rating);
+        }
+        
+        elements.catBrowserProductsContainer.innerHTML = '';
+        
+        const inStockMatches = matches.filter(m => m.product.stock > 0);
+        const outOfStockMatches = matches.filter(m => m.product.stock === 0);
+        
+        if (inStockMatches.length === 0) {
+            elements.catBrowserProductsContainer.innerHTML = `
+                <div class="glass-panel" style="padding: 40px; text-align: center; color: var(--text-muted); grid-column: 1 / -1; width: 100%;">
+                    <i class="fa-solid fa-box-open" style="font-size: 3rem; margin-bottom: 16px; color: var(--primary);"></i>
+                    <h3>No items currently available.</h3>
+                </div>
+            `;
+        } else {
+            inStockMatches.forEach(match => {
+                const card = createCategoryProductCard(match.product, match.store);
+                elements.catBrowserProductsContainer.appendChild(card);
+            });
+        }
+        
+        if (outOfStockMatches.length > 0) {
+            elements.catBrowserOutOfStockSection.style.display = 'block';
+            outOfStockMatches.forEach(match => {
+                const card = createCategoryProductCard(match.product, match.store);
+                elements.catBrowserOutOfStockContainer.appendChild(card);
+            });
+        }
+        
+        syncProductCardCounters();
+    }
+
+    // 5. Create category browser product card
+    function createCategoryProductCard(prod, store) {
+        const card = document.createElement('div');
+        card.className = 'glass-card product-card';
+        card.style.position = 'relative';
+        card.style.padding = '12px';
+        card.dataset.productObject = JSON.stringify(prod);
+        
+        const emoji = getProductEmoji(prod.name, prod.category);
+        const hasImage = prod.image && prod.image.trim() !== '';
+        const visualContent = hasImage 
+            ? `<img src="${prod.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 12px;" alt="${prod.name}">`
+            : emoji;
+            
+        let discountPercent = 0;
+        if (prod.variants && prod.variants.length > 0) {
+            const firstVar = prod.variants[0];
+            if (firstVar && firstVar.originalPrice && firstVar.originalPrice > firstVar.price) {
+                discountPercent = Math.round(((firstVar.originalPrice - firstVar.price) / firstVar.originalPrice) * 100);
+            }
+        } else if (prod.originalPrice && prod.originalPrice > prod.price) {
+            discountPercent = Math.round(((prod.originalPrice - prod.price) / prod.originalPrice) * 100);
+        }
+        const discountBadgeHtml = discountPercent > 0 
+            ? `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${discountPercent}%</span>`
+            : '';
+        const badgeHtml = discountBadgeHtml || (prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '');
+        
+        let dietaryHtml = '';
+        if (prod.dietaryType === 'Veg') {
+            dietaryHtml = `<span class="dietary-badge veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
+        } else if (prod.dietaryType === 'Non-Veg') {
+            dietaryHtml = `<span class="dietary-badge non-veg" style="position: absolute; top: 12px; left: 12px; z-index: 10; display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
+        }
+
+        let priceHtml = `₹${prod.price.toFixed(2)}`;
+        if (prod.variants && prod.variants.length > 0) {
+            const firstVar = prod.variants[0];
+            if (firstVar) {
+                priceHtml = firstVar.originalPrice && firstVar.originalPrice > firstVar.price
+                    ? `<span class="product-price-slashed">₹${firstVar.originalPrice.toFixed(2)}</span>₹${firstVar.price.toFixed(2)}`
+                    : `₹${firstVar.price.toFixed(2)}`;
+            }
+        } else {
+            priceHtml = prod.originalPrice && prod.originalPrice > prod.price
+                ? `<span class="product-price-slashed">₹${prod.originalPrice.toFixed(2)}</span>₹${prod.price.toFixed(2)}`
+                : `₹${prod.price.toFixed(2)}`;
+        }
+        
+        const isClosed = store.status === 'Closed';
+        const isSuspended = store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended');
+        
+        let variantSelectorHtml = '';
+        if (prod.variants && prod.variants.length > 0) {
+            variantSelectorHtml = `
+                <div class="product-variant-selector" style="margin-top: 6px;">
+                    <select class="variant-select glass-input" style="width: 100%; padding: 2px 6px; font-size: 0.75rem; border-radius: 6px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); color: white; height: auto;">
+                        ${prod.variants.map(v => `<option value="${v.id}">${v.name} - ₹${v.price.toFixed(2)}</option>`).join('')}
+                    </select>
+                </div>
+            `;
+        }
+        
+        card.innerHTML = `
+            <div class="product-card-top" style="cursor: pointer;">
+                <div id="badge-container-${prod.id}">${badgeHtml}</div>
+                ${dietaryHtml}
+                <div class="product-emoji-container">${visualContent}</div>
+                <span class="product-stock-tag ${prod.stock > 0 ? 'in-stock' : 'out-stock'}" id="stock-tag-${prod.id}">${prod.stock > 0 ? 'In Stock' : 'Out of Stock'}</span>
+                <button class="btn-premium btn-add-cart" data-store-id="${store.id}" data-product-id="${prod.id}" ${prod.stock === 0 || isClosed || isSuspended ? 'disabled' : ''}>
+                    ADD
+                </button>
+            </div>
+            <div class="product-info">
+                <div class="product-unit" id="unit-tag-${prod.id}">${prod.unit}</div>
+                <h3>${prod.name}</h3>
+                <div style="font-size: 0.7rem; color: var(--secondary); margin-top: 2px; font-weight: 600;"><i class="fa-solid fa-shop"></i> ${store.name.split(' & ')[0]}</div>
+                ${variantSelectorHtml}
+            </div>
+            <div class="product-footer">
+                <div class="product-price" id="price-tag-${prod.id}">${priceHtml}</div>
+            </div>
+        `;
+
+        // Click on product top opens detailed modal
+        card.querySelector('.product-card-top').addEventListener('click', (e) => {
+            if (e.target.closest('.btn-add-cart') || e.target.closest('.btn-counter-container')) return;
+            openProductDetailsModal(prod, store);
+        });
+
+        if (prod.variants && prod.variants.length > 0) {
+            const selectEl = card.querySelector('.variant-select');
+            const updateCardUI = () => {
+                const selectedId = selectEl.value;
+                const variant = prod.variants.find(v => v.id === selectedId);
+                if (variant) {
+                    const priceTag = card.querySelector(`#price-tag-${prod.id}`);
+                    const unitTag = card.querySelector(`#unit-tag-${prod.id}`);
+                    const stockTag = card.querySelector(`#stock-tag-${prod.id}`);
+                    const badgeContainer = card.querySelector(`#badge-container-${prod.id}`);
+                    
+                    if (variant.originalPrice && variant.originalPrice > variant.price) {
+                        priceTag.innerHTML = `<span class="product-price-slashed">₹${variant.originalPrice.toFixed(2)}</span>₹${variant.price.toFixed(2)}`;
+                        const varDiscountPercent = Math.round(((variant.originalPrice - variant.price) / variant.originalPrice) * 100);
+                        if (badgeContainer) {
+                            badgeContainer.innerHTML = `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${varDiscountPercent}%</span>`;
+                        }
+                    } else {
+                        priceTag.innerHTML = `₹${variant.price.toFixed(2)}`;
+                        if (badgeContainer) {
+                            badgeContainer.innerHTML = prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '';
+                        }
+                    }
+                    
+                    unitTag.innerText = variant.name;
+                    
+                    if (variant.stock > 0) {
+                        stockTag.className = 'product-stock-tag in-stock';
+                        stockTag.innerText = 'In Stock';
+                        card.querySelector('.btn-add-cart').disabled = isClosed;
+                    } else {
+                        stockTag.className = 'product-stock-tag out-stock';
+                        stockTag.innerText = 'Out of Stock';
+                        card.querySelector('.btn-add-cart').disabled = true;
+                    }
+                    syncProductCardCounters();
+                }
+            };
+            selectEl.addEventListener('change', updateCardUI);
+        }
+
+        card.querySelector('.btn-add-cart').addEventListener('click', async (e) => {
+            let selectedVariant = null;
+            if (prod.variants && prod.variants.length > 0) {
+                const selectedId = card.querySelector('.variant-select').value;
+                selectedVariant = prod.variants.find(v => v.id === selectedId);
+            }
+            await addToCart(store.id, prod, selectedVariant, e);
+            syncProductCardCounters();
+            updateFloatingCartDock();
+        });
+
+        return card;
+    }
+
+    // 6. Open detailed product modal (Blinkit style)
+    function openProductDetailsModal(prod, store) {
+        if (!elements.modalProductDetail) return;
+        
+        activeDetailStore = store;
+        activeDetailProduct = prod;
+        activeDetailVariant = null;
+        
+        elements.detailStoreNameBadge.innerHTML = `<i class="fa-solid fa-shop"></i> ${store.name}`;
+        elements.detailProductTitle.innerText = prod.name;
+        elements.detailProductUnit.innerText = prod.unit;
+        elements.detailProductDesc.innerText = prod.desc || 'Fresh item sourced locally.';
+        
+        // Render Image
+        const emoji = getProductEmoji(prod.name, prod.category);
+        const hasImage = prod.image && prod.image.trim() !== '';
+        elements.detailProductImageContainer.innerHTML = hasImage 
+            ? `<img src="${prod.image}" style="width: 100%; height: 100%; object-fit: cover; border-radius: 16px;" alt="${prod.name}">`
+            : emoji;
+            
+        // Render Badge
+        let discountPercent = 0;
+        if (prod.variants && prod.variants.length > 0) {
+            const firstVar = prod.variants[0];
+            if (firstVar && firstVar.originalPrice && firstVar.originalPrice > firstVar.price) {
+                discountPercent = Math.round(((firstVar.originalPrice - firstVar.price) / firstVar.originalPrice) * 100);
+            }
+        } else if (prod.originalPrice && prod.originalPrice > prod.price) {
+            discountPercent = Math.round(((prod.originalPrice - prod.price) / prod.originalPrice) * 100);
+        }
+        const discountBadgeHtml = discountPercent > 0 
+            ? `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${discountPercent}%</span>`
+            : '';
+        elements.detailProductBadgeContainer.innerHTML = discountBadgeHtml || (prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '');
+        
+        // Render Dietary Badge
+        let dietaryHtml = '';
+        if (prod.dietaryType === 'Veg') {
+            dietaryHtml = `<span class="dietary-badge veg" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #10b981; background: transparent; border-radius: 4px; padding: 2px;" title="Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #10b981;"></span></span>`;
+        } else if (prod.dietaryType === 'Non-Veg') {
+            dietaryHtml = `<span class="dietary-badge non-veg" style="display: inline-flex; align-items: center; justify-content: center; width: 18px; height: 18px; border: 2px solid #ef4444; background: transparent; border-radius: 4px; padding: 2px;" title="Non-Veg"><span style="width: 8px; height: 8px; border-radius: 50%; background: #ef4444;"></span></span>`;
+        }
+        elements.detailProductDietaryBadge.innerHTML = dietaryHtml;
+        
+        // Render Variants as Pills
+        const pillsContainer = elements.detailVariantsPills;
+        pillsContainer.innerHTML = '';
+        
+        let selectedVariant = null;
+        
+        const updateDetailActionAndPrice = (v = null) => {
+            selectedVariant = v;
+            activeDetailVariant = v;
+            
+            // Render alternative stores comparison selector inside modal
+            renderCompareStores(prod, store, v);
+            
+            const price = v ? v.price : prod.price;
+            const originalPrice = v ? v.originalPrice : prod.originalPrice;
+            
+            if (originalPrice && originalPrice > price) {
+                elements.detailProductPrice.innerHTML = `<span class="product-price-slashed">₹${originalPrice.toFixed(2)}</span>₹${price.toFixed(2)}`;
+            } else {
+                elements.detailProductPrice.innerHTML = `₹${price.toFixed(2)}`;
+            }
+
+            // Update discount badge inside details modal when variant changes
+            let vDiscountPercent = 0;
+            if (originalPrice && originalPrice > price) {
+                vDiscountPercent = Math.round(((originalPrice - price) / originalPrice) * 100);
+            }
+            const badgeContainer = elements.detailProductBadgeContainer;
+            if (badgeContainer) {
+                if (vDiscountPercent > 0) {
+                    badgeContainer.innerHTML = `<span class="product-badge-promo discount-badge" style="background: #10b981; color: white; border-radius: 4px; font-weight: 800; font-size: 0.7rem;"><i class="fa-solid fa-arrow-down"></i>${vDiscountPercent}%</span>`;
+                } else {
+                    badgeContainer.innerHTML = prod.badgeText ? `<span class="product-badge-promo">${prod.badgeText}</span>` : '';
+                }
+            }
+            
+            // Actions Button (counter or add)
+            const itemId = v ? `${prod.id}-${v.id}` : prod.id;
+            const cartItem = cart.find(item => item.id === itemId && item.storeId === store.id);
+            const quantity = cartItem ? cartItem.quantity : 0;
+            
+            const actionContainer = elements.detailActionContainer;
+            actionContainer.innerHTML = '';
+            
+            const isClosed = store.status === 'Closed';
+            const isSuspended = store.status === 'Suspended' || (store.subscription && store.subscription.status === 'Suspended');
+            
+            if (isSuspended) {
+                actionContainer.innerHTML = `<button class="btn-premium" disabled style="background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--danger); font-size: 0.85rem; padding: 6px 16px; border-radius: 8px;">Suspended</button>`;
+            } else if (isClosed) {
+                actionContainer.innerHTML = `<button class="btn-premium" disabled style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.85rem; padding: 6px 16px; border-radius: 8px;">Closed</button>`;
+            } else if (prod.stock === 0 || (v && v.stock === 0)) {
+                actionContainer.innerHTML = `<button class="btn-premium" disabled style="background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-muted); font-size: 0.85rem; padding: 6px 16px; border-radius: 8px;">Out of Stock</button>`;
+            } else if (quantity > 0) {
+                const counter = document.createElement('div');
+                counter.className = 'btn-counter-container';
+                counter.innerHTML = `
+                    <button class="btn-counter-btn btn-counter-dec" type="button"><i class="fa-solid fa-minus"></i></button>
+                    <span class="btn-counter-val">${quantity}</span>
+                    <button class="btn-counter-btn btn-counter-inc" type="button"><i class="fa-solid fa-plus"></i></button>
+                `;
+                
+                counter.querySelector('.btn-counter-dec').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await updateQuantity(itemId, 'decrease');
+                    updateDetailActionAndPrice(v);
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                });
+                
+                counter.querySelector('.btn-counter-inc').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await updateQuantity(itemId, 'increase');
+                    updateDetailActionAndPrice(v);
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                });
+                
+                actionContainer.appendChild(counter);
+            } else {
+                const add = document.createElement('button');
+                add.className = 'btn-premium btn-add-cart';
+                add.style.cssText = 'background: var(--bg-card); color: var(--primary); border: 1.5px solid var(--primary); font-size: 0.85rem; padding: 6px 16px; border-radius: 8px; font-weight: 700; display: inline-flex; align-items: center; gap: 4px; box-shadow: 0 2px 8px var(--primary-glow);';
+                add.innerHTML = 'ADD';
+                
+                add.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await addToCart(store.id, prod, v, e);
+                    updateDetailActionAndPrice(v);
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                });
+                
+                actionContainer.appendChild(add);
+            }
+        };
+        
+        if (prod.variants && prod.variants.length > 0) {
+            prod.variants.forEach((v, index) => {
+                const pill = document.createElement('button');
+                pill.className = `btn-outline variant-pill ${index === 0 ? 'active' : ''}`;
+                pill.style.cssText = 'padding: 6px 12px; font-size: 0.78rem; border-radius: 20px; font-weight: 600; cursor: pointer; transition: all 0.2s;';
+                if (index === 0) {
+                    pill.style.background = 'var(--primary)';
+                    pill.style.borderColor = 'var(--primary)';
+                    pill.style.color = 'white';
+                }
+                pill.innerText = v.name;
+                
+                pill.addEventListener('click', () => {
+                    pillsContainer.querySelectorAll('.variant-pill').forEach(p => {
+                        p.classList.remove('active');
+                        p.style.background = 'transparent';
+                        p.style.borderColor = 'var(--primary)';
+                        p.style.color = 'var(--primary)';
+                    });
+                    pill.classList.add('active');
+                    pill.style.background = 'var(--primary)';
+                    pill.style.borderColor = 'var(--primary)';
+                    pill.style.color = 'white';
+                    
+                    updateDetailActionAndPrice(v);
+                });
+                
+                pillsContainer.appendChild(pill);
+            });
+            updateDetailActionAndPrice(prod.variants[0]);
+        } else {
+            const defaultPill = document.createElement('button');
+            defaultPill.className = 'btn-outline variant-pill active';
+            defaultPill.style.cssText = 'padding: 6px 12px; font-size: 0.78rem; border-radius: 20px; font-weight: 600; background: var(--primary); border-color: var(--primary); color: white; cursor: default;';
+            defaultPill.innerText = prod.unit;
+            pillsContainer.appendChild(defaultPill);
+            
+            updateDetailActionAndPrice(null);
+        }
+        
+        // Similar products carousels
+        const similarCarousel = elements.detailSimilarProductsCarousel;
+        const similarSection = elements.detailSimilarProductsSection;
+        similarCarousel.innerHTML = '';
+        similarSection.style.display = 'none';
+        
+        db.getStores().then(allStores => {
+            let similarList = [];
+            allStores.forEach(s => {
+                if (s.status === 'Suspended') return;
+                s.products.forEach(p => {
+                    if (p.category === prod.category && p.id !== prod.id) {
+                        similarList.push({ product: p, store: s });
+                    }
+                });
+            });
+            
+            if (similarList.length > 0) {
+                similarSection.style.display = 'block';
+                similarList.slice(0, 5).forEach(match => {
+                    const card = createCategoryProductCard(match.product, match.store);
+                    card.style.flex = '0 0 160px';
+                    card.style.minWidth = '160px';
+                    card.style.maxWidth = '160px';
+                    card.style.padding = '8px';
+                    card.querySelector('.product-emoji-container').style.height = '80px';
+                    similarCarousel.appendChild(card);
+                });
+                syncProductCardCounters();
+            }
+        });
+        
+        elements.modalProductDetail.style.display = 'flex';
+        elements.modalProductDetail.classList.add('active');
+    }
+
+    // Dynamic Store Comparison Selector inside details modal
+    async function renderCompareStores(prod, store, selectedVar) {
+        const listContainer = elements.detailCompareStoresList;
+        const sectionContainer = elements.detailCompareStoresSection;
+        if (!listContainer || !sectionContainer) return;
+
+        listContainer.innerHTML = '';
+        
+        const allStores = await db.getStores();
+        const matches = [];
+        
+        allStores.forEach(s => {
+            const isSuspended = s.status === 'Suspended' || (s.subscription && s.subscription.status === 'Suspended');
+            if (isSuspended) return;
+            
+            // Match same product name
+            const matchedProd = s.products.find(p => p.name.toLowerCase() === prod.name.toLowerCase());
+            if (matchedProd) {
+                matches.push({ store: s, product: matchedProd });
+            }
+        });
+
+        if (matches.length === 0) {
+            sectionContainer.style.display = 'none';
+            return;
+        }
+
+        sectionContainer.style.display = 'block';
+
+        matches.forEach(match => {
+            const otherStore = match.store;
+            const otherProd = match.product;
+            
+            // Match variant size/name
+            let otherVar = null;
+            if (selectedVar && otherProd.variants && otherProd.variants.length > 0) {
+                otherVar = otherProd.variants.find(v => v.name.toLowerCase() === selectedVar.name.toLowerCase()) || otherProd.variants[0];
+            } else if (otherProd.variants && otherProd.variants.length > 0) {
+                otherVar = otherProd.variants[0];
+            }
+
+            const price = otherVar ? otherVar.price : otherProd.price;
+            const originalPrice = otherVar ? otherVar.originalPrice : otherProd.originalPrice;
+            
+            let priceHtml = `₹${price.toFixed(2)}`;
+            if (originalPrice && originalPrice > price) {
+                priceHtml = `<span style="font-size: 0.75rem; text-decoration: line-through; color: var(--text-muted); margin-right: 4px;">₹${originalPrice.toFixed(2)}</span> ₹${price.toFixed(2)}`;
+            }
+
+            const dist = otherStore.distance || 1.2;
+            const deliveryFee = otherStore.distance !== undefined ? db.getDeliveryFee(dist, price) : 20.00;
+            
+            const isCurrentStore = (otherStore.id === store.id);
+            
+            const row = document.createElement('div');
+            row.className = 'store-compare-row';
+            row.style.cssText = 'display: flex; justify-content: space-between; align-items: center; padding: 10px 12px; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border-color); border-radius: 12px; transition: all 0.2s;';
+            
+            if (isCurrentStore) {
+                row.style.borderColor = 'var(--primary)';
+                row.style.background = 'rgba(16, 185, 129, 0.05)';
+            }
+
+            const deliveryText = otherStore.status === 'Closed' 
+                ? `<span style="color: var(--danger); font-weight: 600;">Closed</span>`
+                : `<i class="fa-solid fa-truck" style="color: var(--secondary); margin-right: 4px;"></i> ${dist.toFixed(1)} km &bull; ${otherStore.deliveryTime || '10-15'} mins`;
+
+            row.innerHTML = `
+                <div class="store-compare-info" style="display: flex; flex-direction: column; gap: 4px; max-width: 60%;">
+                    <span style="font-size: 0.88rem; font-weight: 700; color: var(--text-main); display: flex; align-items: center; gap: 6px; text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">
+                        ${otherStore.name} 
+                        ${isCurrentStore ? '<span style="font-size: 0.65rem; background: var(--primary); color: white; padding: 1px 6px; border-radius: 10px; font-weight: 600;">Current</span>' : ''}
+                    </span>
+                    <span style="font-size: 0.72rem; color: var(--text-muted);">${deliveryText}</span>
+                </div>
+                <div class="store-compare-action" style="display: flex; align-items: center; gap: 12px;">
+                    <div class="store-compare-price" style="text-align: right;">
+                        <div style="font-size: 0.95rem; font-weight: 800; color: var(--text-main);">${priceHtml}</div>
+                        <div style="font-size: 0.65rem; color: var(--text-muted);">+₹${deliveryFee.toFixed(0)} delivery</div>
+                    </div>
+                    <div class="store-btn-container" data-store-id="${otherStore.id}" data-product-id="${otherProd.id}" data-variant-id="${otherVar ? otherVar.id : ''}">
+                        <!-- ADD or Counter controls -->
+                    </div>
+                </div>
+            `;
+            listContainer.appendChild(row);
+        });
+
+        await syncCompareStoreButtons(store);
+    }
+
+    async function syncCompareStoreButtons(currentStore) {
+        const containers = document.querySelectorAll('.store-btn-container');
+        for (const container of containers) {
+            const storeId = container.dataset.storeId;
+            const productId = container.dataset.productId;
+            const variantId = container.dataset.variantId || null;
+            
+            const itemId = variantId ? `${productId}-${variantId}` : productId;
+            const cartItem = cart.find(item => item.id === itemId && item.storeId === storeId);
+            const quantity = cartItem ? cartItem.quantity : 0;
+            
+            container.innerHTML = '';
+            
+            const otherStore = await db.getStoreById(storeId);
+            if (!otherStore) continue;
+            
+            const isClosed = otherStore.status === 'Closed';
+            const isSuspended = otherStore.status === 'Suspended' || (otherStore.subscription && otherStore.subscription.status === 'Suspended');
+            
+            if (isSuspended) {
+                container.innerHTML = `<button class="btn-premium" disabled style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; background: rgba(220, 38, 38, 0.15); border: 1px solid rgba(220, 38, 38, 0.3); color: var(--danger); outline: none;">Suspended</button>`;
+            } else if (isClosed) {
+                container.innerHTML = `<button class="btn-premium" disabled style="padding: 4px 10px; font-size: 0.75rem; border-radius: 6px; background: rgba(255,255,255,0.05); border: 1px solid var(--border-color); color: var(--text-muted); outline: none;">Closed</button>`;
+            } else if (quantity > 0) {
+                const counter = document.createElement('div');
+                counter.className = 'btn-counter-container';
+                counter.style.cssText = 'width: 70px; height: 26px; display: inline-flex; align-items: center; justify-content: space-between; border: 1.5px solid var(--primary); border-radius: 6px; background: var(--bg-card); overflow: hidden; position: static !important;';
+                counter.innerHTML = `
+                    <button class="btn-counter-btn btn-counter-dec" type="button" style="width: 20px; height: 100%; border: none; background: transparent; color: var(--primary); font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-minus"></i></button>
+                    <span class="btn-counter-val" style="font-size: 0.78rem; font-weight: 800; color: var(--text-main);">${quantity}</span>
+                    <button class="btn-counter-btn btn-counter-inc" type="button" style="width: 20px; height: 100%; border: none; background: transparent; color: var(--primary); font-weight: 800; font-size: 0.85rem; cursor: pointer; display: flex; align-items: center; justify-content: center;"><i class="fa-solid fa-plus"></i></button>
+                `;
+                
+                counter.querySelector('.btn-counter-dec').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await updateQuantity(itemId, 'decrease');
+                    await syncCompareStoreButtons(currentStore);
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                    if (storeId === currentStore.id && activeDetailVariant && activeDetailVariant.id === variantId) {
+                        updateDetailActionAndPrice(activeDetailVariant);
+                    } else if (storeId === currentStore.id && !activeDetailVariant && !variantId) {
+                        updateDetailActionAndPrice(null);
+                    }
+                });
+                
+                counter.querySelector('.btn-counter-inc').addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    await updateQuantity(itemId, 'increase');
+                    await syncCompareStoreButtons(currentStore);
+                    syncProductCardCounters();
+                    updateFloatingCartDock();
+                    if (storeId === currentStore.id && activeDetailVariant && activeDetailVariant.id === variantId) {
+                        updateDetailActionAndPrice(activeDetailVariant);
+                    } else if (storeId === currentStore.id && !activeDetailVariant && !variantId) {
+                        updateDetailActionAndPrice(null);
+                    }
+                });
+                
+                container.appendChild(counter);
+            } else {
+                const addBtn = document.createElement('button');
+                addBtn.className = 'btn-premium btn-add-cart';
+                addBtn.style.cssText = 'padding: 4px 12px; font-size: 0.78rem; border-radius: 6px; background: var(--bg-card); color: var(--primary); border: 1.5px solid var(--primary); font-weight: 700; cursor: pointer;';
+                addBtn.innerText = 'ADD';
+                
+                addBtn.addEventListener('click', async (e) => {
+                    e.stopPropagation();
+                    const prodObj = otherStore.products.find(p => p.id === productId);
+                    let varObj = null;
+                    if (variantId && prodObj && prodObj.variants) {
+                        varObj = prodObj.variants.find(v => v.id === variantId);
+                    }
+                    if (prodObj) {
+                        await addToCart(storeId, prodObj, varObj, e);
+                        await syncCompareStoreButtons(currentStore);
+                        syncProductCardCounters();
+                        updateFloatingCartDock();
+                        if (storeId === currentStore.id && activeDetailVariant && activeDetailVariant.id === variantId) {
+                            updateDetailActionAndPrice(activeDetailVariant);
+                        } else if (storeId === currentStore.id && !activeDetailVariant && !variantId) {
+                            updateDetailActionAndPrice(null);
+                        }
+                    }
+                });
+                
+                container.appendChild(addBtn);
+            }
+        }
+    }
+
+    // 7. Render Homepage Product Shelves
+    async function renderHomepageProductShelves() {
+        const shelvesDiv = document.getElementById('homepage-product-shelves');
+        if (!shelvesDiv) return;
+        shelvesDiv.innerHTML = '';
+        
+        const stores = await db.getStores();
+        let allProducts = [];
+        
+        stores.forEach(store => {
+            if (store.status !== 'Open') return; // only open stores
+            store.products.forEach(p => {
+                allProducts.push({ product: p, store });
+            });
+        });
+        
+        if (allProducts.length === 0) {
+            shelvesDiv.style.display = 'none';
+            return;
+        }
+        
+        shelvesDiv.style.display = 'flex';
+        
+        // Define shelves to render: Daily Essentials (pantry/dairy), Farm Fresh (veggies/fruits), Bakery Specials
+        const shelfConfig = [
+            { title: 'Daily Essentials & Dairy', categories: ['dairy', 'pantry'], icon: '<i class="fa-solid fa-cow" style="color: var(--primary);"></i>' },
+            { title: 'Farm Fresh Vegetables & Fruits', categories: ['veggies', 'fruits'], icon: '<i class="fa-solid fa-carrot" style="color: var(--primary);"></i>' },
+            { title: 'Fresh Baked Treats & Bread', categories: ['bakery'], icon: '<i class="fa-solid fa-bread-slice" style="color: var(--primary);"></i>' }
+        ];
+        
+        shelfConfig.forEach(cfg => {
+            const filtered = allProducts.filter(item => cfg.categories.includes(item.product.category));
+            if (filtered.length === 0) return;
+            
+            const shelf = document.createElement('div');
+            shelf.className = 'category-shelf';
+            
+            const header = document.createElement('div');
+            header.className = 'shelf-header';
+            header.innerHTML = `
+                <h3>${cfg.icon} ${cfg.title}</h3>
+                <button class="btn-see-all">Explore Category <i class="fa-solid fa-arrow-right"></i></button>
+            `;
+            
+            header.querySelector('.btn-see-all').addEventListener('click', () => {
+                openCategoryBrowser(cfg.categories[0]);
+            });
+            
+            const carousel = document.createElement('div');
+            carousel.className = 'shelf-carousel';
+            
+            filtered.slice(0, 8).forEach(item => {
+                const card = createCategoryProductCard(item.product, item.store);
+                carousel.appendChild(card);
+            });
+            
+            shelf.appendChild(header);
+            shelf.appendChild(carousel);
+            shelvesDiv.appendChild(shelf);
+        });
+        
+        syncProductCardCounters();
+    }
+
+    // 8. Bind Events for Quick-Commerce views
+    if (elements.btnModeStores) {
+        elements.btnModeStores.addEventListener('click', () => {
+            elements.btnModeStores.classList.add('active');
+            elements.btnModeInstant.classList.remove('active');
+            elements.btnModeOffers.classList.remove('active');
+            
+            elements.btnModeStores.style.borderBottom = '2px solid var(--primary)';
+            elements.btnModeInstant.style.borderBottom = 'none';
+            elements.btnModeOffers.style.borderBottom = 'none';
+            
+            elements.btnModeStores.style.color = 'var(--primary)';
+            elements.btnModeInstant.style.color = 'var(--text-muted)';
+            elements.btnModeOffers.style.color = 'var(--text-muted)';
+            
+            switchView('landing');
+        });
+    }
+    if (elements.btnModeInstant) {
+        elements.btnModeInstant.addEventListener('click', () => {
+            elements.btnModeStores.classList.remove('active');
+            elements.btnModeInstant.classList.add('active');
+            elements.btnModeOffers.classList.remove('active');
+            
+            elements.btnModeStores.style.borderBottom = 'none';
+            elements.btnModeInstant.style.borderBottom = '2px solid var(--primary)';
+            elements.btnModeOffers.style.borderBottom = 'none';
+            
+            elements.btnModeStores.style.color = 'var(--text-muted)';
+            elements.btnModeInstant.style.color = 'var(--primary)';
+            elements.btnModeOffers.style.color = 'var(--text-muted)';
+            
+            openCategoryBrowser('dairy');
+        });
+    }
+    if (elements.btnModeOffers) {
+        elements.btnModeOffers.addEventListener('click', () => {
+            elements.btnModeStores.classList.remove('active');
+            elements.btnModeInstant.classList.remove('active');
+            elements.btnModeOffers.classList.add('active');
+            
+            elements.btnModeStores.style.borderBottom = 'none';
+            elements.btnModeInstant.style.borderBottom = 'none';
+            elements.btnModeOffers.style.borderBottom = '2px solid var(--primary)';
+            
+            elements.btnModeStores.style.color = 'var(--text-muted)';
+            elements.btnModeInstant.style.color = 'var(--text-muted)';
+            elements.btnModeOffers.style.color = 'var(--primary)';
+            
+            elements.globalSearchInput.value = 'Premium';
+            triggerGlobalSearch('Premium');
+        });
+    }
+
+    if (elements.btnBackToLandingFromCat) {
+        elements.btnBackToLandingFromCat.addEventListener('click', () => {
+            switchView('landing');
+        });
+    }
+
+    if (elements.selectCatSort) {
+        elements.selectCatSort.addEventListener('change', () => {
+            const val = elements.selectCatSort.value;
+            if (val.startsWith('veg-')) {
+                catFilterVegOnly = true;
+                catSortOrder = val.replace('veg-', '');
+            } else {
+                catFilterVegOnly = false;
+                catSortOrder = val;
+            }
+            const activeBtn = elements.catBrowserSidebar.querySelector('.cat-sidebar-btn.active');
+            if (activeBtn) {
+                renderCategoryBrowserProducts(activeBtn.dataset.categoryId);
+            }
+        });
+    }
+    
+    if (elements.btnCatFilterAll) {
+        elements.btnCatFilterAll.addEventListener('click', () => {
+            elements.btnCatFilterAll.classList.add('active');
+            elements.btnCatFilterVeg.classList.remove('active');
+            catFilterVegOnly = false;
+            const activeBtn = elements.catBrowserSidebar.querySelector('.cat-sidebar-btn.active');
+            if (activeBtn) {
+                renderCategoryBrowserProducts(activeBtn.dataset.categoryId);
+            }
+        });
+    }
+    
+    if (elements.btnCatFilterVeg) {
+        elements.btnCatFilterVeg.addEventListener('click', () => {
+            elements.btnCatFilterAll.classList.remove('active');
+            elements.btnCatFilterVeg.classList.add('active');
+            catFilterVegOnly = true;
+            const activeBtn = elements.catBrowserSidebar.querySelector('.cat-sidebar-btn.active');
+            if (activeBtn) {
+                renderCategoryBrowserProducts(activeBtn.dataset.categoryId);
+            }
+        });
+    }
+
+    if (elements.btnCloseProductDetailModal) {
+        elements.btnCloseProductDetailModal.addEventListener('click', () => {
+            elements.modalProductDetail.style.display = 'none';
+            elements.modalProductDetail.classList.remove('active');
+            activeDetailStore = null;
+            activeDetailProduct = null;
+            activeDetailVariant = null;
+        });
+    }
+    if (elements.modalProductDetail) {
+        elements.modalProductDetail.addEventListener('click', (e) => {
+            if (e.target === elements.modalProductDetail) {
+                elements.modalProductDetail.style.display = 'none';
+                elements.modalProductDetail.classList.remove('active');
+                activeDetailStore = null;
+                activeDetailProduct = null;
+                activeDetailVariant = null;
+            }
+        });
+    }
+
+    if (elements.btnDockViewCart) {
+        elements.btnDockViewCart.addEventListener('click', () => {
+            elements.btnCart.click();
+        });
+    }
+
     // --- Bootstrapping ---
     async function bootstrap() {
         applyTheme(localStorage.getItem('luxegrocer_theme') || 'dark');
@@ -4076,6 +5545,10 @@ document.addEventListener('DOMContentLoaded', () => {
         if (!trackingOrder) {
             await switchView('landing');
         }
+        // Initial quick commerce rendering updates
+        await renderHomepageProductShelves();
+        syncProductCardCounters();
+        updateFloatingCartDock();
     }
     bootstrap();
 });

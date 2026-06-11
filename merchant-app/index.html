@@ -104,9 +104,8 @@
                 </form>
             </div>
 
-            <!-- Register Store Banner if no Store owned -->
             <div id="owner-no-store-alert" class="glass-panel" style="padding: 60px 30px; text-align: center; display: none;">
-                <span style="font-size: 4rem; display: block; margin-bottom: 20px;">🏪</span>
+                <span style="font-size: 4rem; display: block; margin-bottom: 20px; color: var(--secondary);"><i class="fa-solid fa-store"></i></span>
                 <h2 style="font-size: 2.2rem; margin-bottom: 12px;">Register Your Grocery or Dairy Store</h2>
                 <p style="color: var(--text-muted); max-width: 500px; margin: 0 auto 30px auto; line-height: 1.6;">Build your digital inventory menu in under 5 minutes and accept delivery orders directly from neighbors in your delivery radius.</p>
                 <button class="btn-premium btn-icon-text" id="btn-open-register-modal"><i class="fa-solid fa-plus"></i> Set Up Your Store Front</button>
@@ -117,7 +116,7 @@
                 <!-- Left Sidebar Navigation -->
                 <aside class="owner-sidebar glass-panel">
                     <div style="text-align: center; border-bottom: 1px solid var(--border-color); padding-bottom: 20px; margin-bottom: 20px;">
-                        <div id="owner-sidebar-store-emoji" style="font-size: 3rem; margin-bottom: 10px;">🏪</div>
+                        <div id="owner-sidebar-store-emoji" style="font-size: 2.5rem; margin-bottom: 10px; color: var(--primary);"><i class="fa-solid fa-store"></i></div>
                         <h3 id="owner-sidebar-store-name" style="font-size: 1.2rem; font-weight: 700;">Loading Store...</h3>
                         <span id="owner-sidebar-store-category" style="font-size: 0.75rem; text-transform: uppercase; color: var(--primary); letter-spacing: 0.5px;">Store</span>
                     </div>
@@ -136,7 +135,7 @@
                     <div style="border-top: 1px solid var(--border-color); padding-top: 20px; margin-top: 20px; text-align: center; display: flex; flex-direction: column; gap: 10px;">
                         <span style="font-size: 0.75rem; text-transform: uppercase; color: var(--text-muted); font-weight: bold; letter-spacing: 0.5px;">Store Operating Status</span>
                         <button type="button" class="btn-premium" id="btn-toggle-store-status" style="width: 100%; padding: 8px; font-size: 0.8rem; background: #10b981; border-color: #10b981; color: white;">
-                            🟢 Open for Delivery
+                            <i class="fa-solid fa-circle-check"></i> Open for Delivery
                         </button>
                     </div>
                 </aside>
@@ -153,10 +152,9 @@
                             </div>
                         </div>
                         
-                        <!-- Soundbox widget -->
                         <div class="glass-panel" style="padding: 20px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; border-left: 4px solid var(--accent);">
                             <div style="display: flex; align-items: center; gap: 16px;">
-                                <div style="font-size: 2rem;">🔊</div>
+                                <div style="font-size: 2rem; color: var(--accent);"><i class="fa-solid fa-volume-high"></i></div>
                                 <div>
                                     <h4 style="font-weight: 700; font-size: 1rem;">LuxeGrocer Voice Soundbox Active</h4>
                                     <p style="font-size: 0.8rem; color: var(--text-muted);">Incoming payments and order approvals will be spoken aloud dynamically.</p>
@@ -324,7 +322,7 @@
                                     <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
                                         <input type="file" id="settings-store-banner-file" class="glass-input" accept="image/*" style="flex-grow: 1; padding: 6px 12px;">
                                         <div id="settings-store-banner-preview" style="width: 80px; height: 45px; border-radius: 6px; border: 1.5px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(255,255,255,0.03);">
-                                            <span style="font-size: 1rem; color: var(--text-muted);">🖼️</span>
+                                             <span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-image"></i></span>
                                         </div>
                                     </div>
                                 </div>
@@ -336,6 +334,7 @@
                                     <div class="form-group" style="flex: 1; margin: 0;">
                                         <label for="settings-store-upi-name">UPI Payee / Business Name</label>
                                         <input type="text" id="settings-store-upi-name" class="glass-input" placeholder="E.g., GreenValley Dairy Boutique" required>
+                                    </div>
                                 </div>
                                 
                                 <div class="form-group" style="margin-top: 20px; border-top: 1px dashed var(--border-color); padding-top: 20px;">
@@ -448,7 +447,7 @@
                             <!-- Subscription Status Banner Callout -->
                             <div id="billing-status-callout" style="padding: 20px; border-radius: 12px; margin-bottom: 25px; display: flex; align-items: center; justify-content: space-between; border-left: 5px solid var(--primary); background: rgba(255,255,255,0.02);">
                                 <div style="display: flex; align-items: center; gap: 16px;">
-                                    <span style="font-size: 2.2rem;" id="billing-status-icon">🟢</span>
+                                    <span style="font-size: 1.5rem; display: flex; align-items: center; justify-content: center;" id="billing-status-icon"><i class="fa-solid fa-circle text-success"></i></span>
                                     <div>
                                         <h4 style="font-weight: 700; font-size: 1.1rem; color: var(--text-main);" id="billing-status-title">Store Shelf Active</h4>
                                         <p style="font-size: 0.85rem; color: var(--text-muted); margin-top: 3px;" id="billing-status-desc">Your store is open, listing items, and receiving local checkouts.</p>
@@ -485,7 +484,11 @@
                                     
                                     <div style="margin-top: 25px; padding: 15px; background: rgba(20, 184, 166, 0.05); border-radius: 10px; border: 1px solid rgba(20, 184, 166, 0.15); font-size: 0.8rem; line-height: 1.5; color: var(--text-muted);">
                                         <i class="fa-solid fa-circle-info" style="color: var(--secondary); margin-right: 6px;"></i>
-                                        <strong>Platform Fee Policy:</strong> LuxeGrocer charges a flat monthly or annual subscription fee. All order earnings flow 100% directly from customers to your personal UPI VPA or Cash on Delivery collectors without any in                                 <!-- Right side: Renew plan payment form -->
+                                        <strong>Platform Fee Policy:</strong> LuxeGrocer charges a flat monthly or annual subscription fee. All order earnings flow 100% directly from customers to your personal UPI VPA or Cash on Delivery collectors without any intermediate commissions or transaction handling fees.
+                                    </div>
+                                </div>
+                                
+                                <!-- Right side: Renew plan payment form -->
                                 <div>
                                     <h3 style="font-size: 1.2rem; margin-bottom: 15px; color: var(--text-main);">Renew or Extend Plan</h3>
                                     <form id="form-billing-renew" class="checkout-form" style="display: flex; flex-direction: column; gap: 15px;">
@@ -633,6 +636,10 @@
                         <label for="prod-price">Price (₹)</label>
                         <input type="number" step="0.01" id="prod-price" class="glass-input" required placeholder="90.00">
                     </div>
+                    <div class="form-group">
+                        <label for="prod-original-price">Original Price (₹) <span style="font-size: 0.75rem; color: var(--text-muted); font-weight: normal;">(Optional)</span></label>
+                        <input type="number" step="0.01" id="prod-original-price" class="glass-input" placeholder="100.00">
+                    </div>
                 </div>
                 <div class="form-group-row">
                     <div class="form-group">
@@ -666,7 +673,7 @@
                     <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
                         <input type="file" id="prod-image-file" class="glass-input" accept="image/*" style="flex-grow: 1; padding: 6px 12px;">
                         <div id="prod-image-preview" style="width: 50px; height: 50px; border-radius: 8px; border: 1.5px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(255,255,255,0.03);">
-                            <span style="font-size: 1.2rem; color: var(--text-muted);">📷</span>
+                            <span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-camera"></i></span>
                         </div>
                     </div>
                 </div>
@@ -731,7 +738,7 @@
                     <div style="display: flex; gap: 12px; align-items: center; margin-top: 6px;">
                         <input type="file" id="reg-store-banner-file" class="glass-input" accept="image/*" style="flex-grow: 1; padding: 6px 12px;">
                         <div id="reg-store-banner-preview" style="width: 80px; height: 45px; border-radius: 6px; border: 1.5px dashed var(--border-color); display: flex; align-items: center; justify-content: center; overflow: hidden; background: rgba(255,255,255,0.03);">
-                            <span style="font-size: 1rem; color: var(--text-muted);">🖼️</span>
+                            <span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-image"></i></span>
                         </div>
                     </div>
                 </div>

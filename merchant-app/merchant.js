@@ -1,10 +1,12 @@
 // merchant.js - LuxeGrocer Merchant Partner Portal Controller
+const BACKEND_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:5000' : window.location.hostname + ':5000';
+const BACKEND_URL = `${window.location.protocol}//${BACKEND_HOST}`;
 
 // Intercept console.error to log to server
 const originalConsoleError = console.error;
 console.error = function(...args) {
     originalConsoleError.apply(console, args);
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'merchant-app console.error', error: args.join(' ') })
@@ -19,7 +21,7 @@ window.addEventListener('error', (event) => {
         colno: event.colno,
         stack: event.error ? event.error.stack : ''
     };
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'merchant-app window.onerror', error: errData })
@@ -28,7 +30,7 @@ window.addEventListener('error', (event) => {
 
 // Event Logging Hooks for Debugging
 document.addEventListener('click', (e) => {
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -42,7 +44,7 @@ document.addEventListener('click', (e) => {
 });
 
 document.addEventListener('submit', (e) => {
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -146,6 +148,7 @@ document.addEventListener('DOMContentLoaded', () => {
         prodName: document.getElementById('prod-name'),
         prodCategory: document.getElementById('prod-category'),
         prodPrice: document.getElementById('prod-price'),
+        prodOriginalPrice: document.getElementById('prod-original-price'),
         prodUnit: document.getElementById('prod-unit'),
         prodStock: document.getElementById('prod-stock'),
         prodDesc: document.getElementById('prod-desc'),
@@ -293,31 +296,31 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Emoji Fallback Selector ---
     function getProductEmoji(name, category) {
         const lowerName = name.toLowerCase();
-        if (lowerName.includes('milk')) return '🥛';
-        if (lowerName.includes('yogurt') || lowerName.includes('curd')) return '🥣';
-        if (lowerName.includes('butter')) return '🧈';
-        if (lowerName.includes('paneer') || lowerName.includes('cheese')) return '🧀';
-        if (lowerName.includes('ghee')) return '🛢️';
-        if (lowerName.includes('apple')) return '🍎';
-        if (lowerName.includes('mango')) return '🥭';
-        if (lowerName.includes('banana')) return '🍌';
-        if (lowerName.includes('avocado')) return '🥑';
-        if (lowerName.includes('cucumber')) return '🥒';
-        if (lowerName.includes('tomato')) return '🍅';
-        if (lowerName.includes('spinach')) return '🥬';
-        if (lowerName.includes('sourdough') || lowerName.includes('bread') || lowerName.includes('loaf')) return '🍞';
-        if (lowerName.includes('croissant')) return '🥐';
-        if (lowerName.includes('juice')) return '🥤';
-        if (lowerName.includes('babka') || lowerName.includes('cake')) return '🍰';
+        if (lowerName.includes('milk')) return 'fa-solid fa-glass-water';
+        if (lowerName.includes('yogurt') || lowerName.includes('curd')) return 'fa-solid fa-bowl-food';
+        if (lowerName.includes('butter')) return 'fa-solid fa-cubes';
+        if (lowerName.includes('paneer') || lowerName.includes('cheese')) return 'fa-solid fa-cheese';
+        if (lowerName.includes('ghee')) return 'fa-solid fa-bottle-droplet';
+        if (lowerName.includes('apple')) return 'fa-solid fa-apple-whole';
+        if (lowerName.includes('mango')) return 'fa-solid fa-lemon';
+        if (lowerName.includes('banana')) return 'fa-solid fa-lemon';
+        if (lowerName.includes('avocado')) return 'fa-solid fa-seedling';
+        if (lowerName.includes('cucumber')) return 'fa-solid fa-carrot';
+        if (lowerName.includes('tomato')) return 'fa-solid fa-seedling';
+        if (lowerName.includes('spinach')) return 'fa-solid fa-leaf';
+        if (lowerName.includes('sourdough') || lowerName.includes('bread') || lowerName.includes('loaf')) return 'fa-solid fa-bread-slice';
+        if (lowerName.includes('croissant')) return 'fa-solid fa-bread-slice';
+        if (lowerName.includes('juice')) return 'fa-solid fa-wine-glass';
+        if (lowerName.includes('babka') || lowerName.includes('cake')) return 'fa-solid fa-cake-candles';
         
         switch (category) {
-            case 'dairy': return '🥛';
-            case 'fruits': return '🍏';
-            case 'veggies': return '🥦';
-            case 'bakery': return '🍞';
-            case 'beverages': return '🍹';
-            case 'pantry': return '🥫';
-            default: return '📦';
+            case 'dairy': return 'fa-solid fa-cow';
+            case 'fruits': return 'fa-solid fa-apple-whole';
+            case 'veggies': return 'fa-solid fa-carrot';
+            case 'bakery': return 'fa-solid fa-bread-slice';
+            case 'beverages': return 'fa-solid fa-wine-glass';
+            case 'pantry': return 'fa-solid fa-box';
+            default: return 'fa-solid fa-box';
         }
     }
 
@@ -575,7 +578,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (store.image && store.image.trim() !== '') {
                 elements.settingsStoreBannerPreview.innerHTML = `<img src="${store.image}" style="width: 100%; height: 100%; object-fit: cover;">`;
             } else {
-                elements.settingsStoreBannerPreview.innerHTML = `<span style="font-size: 1rem; color: var(--text-muted);">🖼️</span>`;
+                elements.settingsStoreBannerPreview.innerHTML = `<span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-image"></i></span>`;
             }
             elements.settingsStoreBannerFile.value = '';
             settingsStoreCustomBannerBase64 = store.image; // Keep existing
@@ -583,11 +586,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // Update Store Status toggle UI button
             const status = store.status || 'Open';
             if (status === 'Closed') {
-                elements.btnToggleStoreStatus.innerText = "🔴 Closed / Offline";
+                elements.btnToggleStoreStatus.innerHTML = '<i class="fa-solid fa-circle-xmark"></i> Closed / Offline';
                 elements.btnToggleStoreStatus.style.background = "#ef4444";
                 elements.btnToggleStoreStatus.style.borderColor = "#ef4444";
             } else {
-                elements.btnToggleStoreStatus.innerText = "🟢 Open for Delivery";
+                elements.btnToggleStoreStatus.innerHTML = '<i class="fa-solid fa-circle-check"></i> Open for Delivery';
                 elements.btnToggleStoreStatus.style.background = "#10b981";
                 elements.btnToggleStoreStatus.style.borderColor = "#10b981";
             }
@@ -1008,9 +1011,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 const swapButtonHtml = canSuggestAlternative
                     ? `<button type="button" class="btn-premium btn-suggest-alternative-item" data-item-id="${item.id}" data-item-name="${item.name}" style="padding: 2px 8px; font-size: 0.7rem; margin-left: 8px; background: rgba(20, 184, 166, 0.1); border: 1px solid var(--primary); color: var(--primary); cursor: pointer; border-radius: 4px;"><i class="fa-solid fa-arrows-rotate"></i> Swap</button>`
                     : '';
+                const itemIcon = item.emoji && item.emoji.includes('fa-')
+                    ? (item.emoji.startsWith('<i') ? item.emoji : `<i class="${item.emoji}"></i>`)
+                    : '<i class="fa-solid fa-box"></i>';
                 return `
                     <div style="display:flex; justify-content:space-between; align-items:center; font-size: 0.9rem; margin-bottom: 6px;">
-                        <span>${item.emoji || '📦'} ${item.name} (x${item.quantity}) ${swapButtonHtml}</span>
+                        <span>${itemIcon} ${item.name} (x${item.quantity}) ${swapButtonHtml}</span>
                         <span>₹${(item.price * item.quantity).toFixed(2)}</span>
                     </div>
                 `;
@@ -1293,20 +1299,20 @@ document.addEventListener('DOMContentLoaded', () => {
             if (prod.variants && prod.variants.length > 0) {
                 prod.variants.forEach(v => {
                     if (v.stock > 0) {
-                        const emoji = getProductEmoji(prod.name, prod.category) || '📦';
+                        const emoji = getProductEmoji(prod.name, prod.category) || 'fa-solid fa-box';
                         optionsHtml += `
                             <option value="${prod.id}::${v.id}" data-id="${prod.id}" data-name="${prod.name} (${v.name})" data-price="${v.price}" data-emoji="${emoji}" data-unit="${v.name}" data-variant-id="${v.id}" data-variant-name="${v.name}">
-                                ${emoji} ${prod.name} - ${v.name} (₹${v.price} | Stock: ${v.stock})
+                                ${prod.name} - ${v.name} (₹${v.price} | Stock: ${v.stock})
                             </option>
                         `;
                     }
                 });
             } else {
                 if (prod.stock > 0) {
-                    const emoji = getProductEmoji(prod.name, prod.category) || '📦';
+                    const emoji = getProductEmoji(prod.name, prod.category) || 'fa-solid fa-box';
                     optionsHtml += `
                         <option value="${prod.id}" data-id="${prod.id}" data-name="${prod.name}" data-price="${prod.price}" data-emoji="${emoji}" data-unit="${prod.unit || '1 Unit'}" data-variant-id="" data-variant-name="">
-                            ${emoji} ${prod.name} (₹${prod.price} | Stock: ${prod.stock})
+                            ${prod.name} (₹${prod.price} | Stock: ${prod.stock})
                         </option>
                     `;
                 }
@@ -1582,14 +1588,14 @@ document.addEventListener('DOMContentLoaded', () => {
         
         const isSuspended = sub.status === 'Suspended' || store.status === 'Suspended';
         if (isSuspended) {
-            elements.billingStatusIcon.innerText = '🔴';
+            elements.billingStatusIcon.innerHTML = '<i class="fa-solid fa-circle-exclamation text-danger" style="font-size: 1.5rem;"></i>';
             elements.billingStatusTitle.innerText = 'Store Front Suspended';
             elements.billingStatusDesc.innerText = 'Your shop is currently hidden from local search results due to an expired subscription plan. Process payment below to instantly restore visibility.';
             elements.billingStatusCallout.style.borderLeftColor = 'var(--danger)';
             elements.billingStatusCallout.style.background = 'rgba(239, 68, 68, 0.05)';
             elements.billingDetailStatus.style.color = 'var(--danger)';
         } else {
-            elements.billingStatusIcon.innerText = '🟢';
+            elements.billingStatusIcon.innerHTML = '<i class="fa-solid fa-circle-check text-success" style="font-size: 1.5rem;"></i>';
             elements.billingStatusTitle.innerText = 'Store Shelf Active';
             elements.billingStatusDesc.innerText = 'Your store is open, listing items, and receiving local checkouts.';
             elements.billingStatusCallout.style.borderLeftColor = 'var(--primary)';
@@ -1626,7 +1632,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.modalRegisterStoreElement.classList.remove('active');
             elements.registerStoreForm.reset();
             regStoreCustomBannerBase64 = null;
-            elements.regStoreBannerPreview.innerHTML = `<span style="font-size: 1rem; color: var(--text-muted);">🖼️</span>`;
+            elements.regStoreBannerPreview.innerHTML = `<span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-image"></i></span>`;
             showToast("Congratulations! Your digital storefront is registered successfully.");
             await loadOwnerPortal();
         }
@@ -1642,14 +1648,16 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const nameVal = variant ? variant.name : '';
         const priceVal = variant ? variant.price : '';
+        const originalPriceVal = variant ? (variant.originalPrice || '') : '';
         const stockVal = variant ? variant.stock : '';
         const vId = variant ? variant.id : 'v-' + Date.now() + '-' + Math.floor(Math.random() * 1000);
 
         row.innerHTML = `
             <input type="hidden" class="variant-id" value="${vId}">
-            <input type="text" class="glass-input variant-name" required placeholder="Size/Unit (e.g. 500ml)" style="flex: 2; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${nameVal}">
+            <input type="text" class="glass-input variant-name" required placeholder="Size/Unit (e.g. 500ml)" style="flex: 1.5; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${nameVal}">
             <input type="number" step="0.01" class="glass-input variant-price" required placeholder="Price (₹)" style="flex: 1; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${priceVal}">
-            <input type="number" class="glass-input variant-stock" required placeholder="Stock" style="flex: 1; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${stockVal}">
+            <input type="number" step="0.01" class="glass-input variant-original-price" placeholder="Orig. Price (₹)" style="flex: 1; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${originalPriceVal}">
+            <input type="number" class="glass-input variant-stock" required placeholder="Stock" style="flex: 0.8; font-size: 0.85rem; padding: 6px 10px; height: 36px;" value="${stockVal}">
             <button type="button" class="btn-icon btn-remove-variant-row" style="width: 36px; height: 36px; color: var(--danger); border-color: rgba(239, 68, 68, 0.2); flex-shrink: 0;" title="Remove Option"><i class="fa-solid fa-trash-can" style="font-size: 0.8rem;"></i></button>
         `;
 
@@ -1681,7 +1689,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 const name = row.querySelector('.variant-name').value.trim();
                 const p = parseFloat(row.querySelector('.variant-price').value) || 0.0;
                 const s = parseInt(row.querySelector('.variant-stock').value) || 0;
-                variants.push({ id: vId, name, price: p, stock: s });
+                const origVal = row.querySelector('.variant-original-price').value;
+                const orig = origVal ? parseFloat(origVal) : undefined;
+                
+                const variantData = { id: vId, name, price: p, stock: s };
+                if (orig !== undefined && !isNaN(orig)) {
+                    variantData.originalPrice = orig;
+                }
+                variants.push(variantData);
                 stock += s;
                 if (idx === 0) {
                     price = p;
@@ -1704,6 +1719,14 @@ document.addEventListener('DOMContentLoaded', () => {
             image: prodCustomImageBase64 || '',
             variants
         };
+
+        if (!hasVariants) {
+            const origPriceVal = elements.prodOriginalPrice.value;
+            const originalPrice = origPriceVal ? parseFloat(origPriceVal) : undefined;
+            if (originalPrice !== undefined && !isNaN(originalPrice)) {
+                prodData.originalPrice = originalPrice;
+            }
+        }
 
         const pId = elements.modalProductId.value;
 
@@ -1733,6 +1756,7 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.prodName.value = product.name;
             elements.prodCategory.value = product.category;
             elements.prodPrice.value = product.price || '';
+            elements.prodOriginalPrice.value = product.originalPrice || '';
             elements.prodUnit.value = product.unit || '';
             elements.prodStock.value = product.stock || '';
             elements.prodDesc.value = product.desc || '';
@@ -1741,6 +1765,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.prodHasVariants.checked = true;
                 elements.prodVariantsSection.style.display = 'block';
                 elements.prodPrice.disabled = true;
+                elements.prodOriginalPrice.disabled = true;
                 elements.prodUnit.disabled = true;
                 elements.prodStock.disabled = true;
                 elements.prodPrice.removeAttribute('required');
@@ -1751,6 +1776,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.prodHasVariants.checked = false;
                 elements.prodVariantsSection.style.display = 'none';
                 elements.prodPrice.disabled = false;
+                elements.prodOriginalPrice.disabled = false;
                 elements.prodUnit.disabled = false;
                 elements.prodStock.disabled = false;
                 elements.prodPrice.setAttribute('required', '');
@@ -1762,7 +1788,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 elements.prodImagePreview.innerHTML = `<img src="${product.image}" style="width: 100%; height: 100%; object-fit: cover;">`;
                 prodCustomImageBase64 = product.image;
             } else {
-                elements.prodImagePreview.innerHTML = `<span style="font-size: 1.2rem; color: var(--text-muted);">📷</span>`;
+                elements.prodImagePreview.innerHTML = `<span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-camera"></i></span>`;
             }
         } else {
             elements.modalProductTitle.innerText = "Add New Product Listing";
@@ -1770,12 +1796,13 @@ document.addEventListener('DOMContentLoaded', () => {
             elements.prodHasVariants.checked = false;
             elements.prodVariantsSection.style.display = 'none';
             elements.prodPrice.disabled = false;
+            elements.prodOriginalPrice.disabled = false;
             elements.prodUnit.disabled = false;
             elements.prodStock.disabled = false;
             elements.prodPrice.setAttribute('required', '');
             elements.prodUnit.setAttribute('required', '');
             elements.prodStock.setAttribute('required', '');
-            elements.prodImagePreview.innerHTML = `<span style="font-size: 1.2rem; color: var(--text-muted);">📷</span>`;
+            elements.prodImagePreview.innerHTML = `<span style="font-size: 1.25rem; color: var(--text-muted);"><i class="fa-solid fa-camera"></i></span>`;
         }
 
         elements.modalProductElement.classList.add('active');
@@ -1948,7 +1975,7 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Server-Sent Events (SSE) Sync ---
-    const sse = new EventSource('http://localhost:5000/api/sync');
+    const sse = new EventSource(`${BACKEND_URL}/api/sync`);
     sse.onmessage = async (e) => {
         try {
             const { event, data } = JSON.parse(e.data);
@@ -2012,12 +2039,12 @@ document.addEventListener('DOMContentLoaded', () => {
         card.style.transition = 'all 0.4s ease-out';
         
         const isEmail = message.startsWith('Email');
-        const icon = isEmail ? '📧' : '📱';
+        const icon = isEmail ? '<i class="fa-solid fa-envelope" style="color: var(--secondary);"></i>' : '<i class="fa-solid fa-mobile-screen-button" style="color: var(--secondary);"></i>';
         const title = isEmail ? 'Simulated Email Sent' : 'Simulated SMS Sent';
         
         card.innerHTML = `
             <div style="display: flex; gap: 12px; align-items: flex-start;">
-                <div style="font-size: 1.5rem; background: rgba(20, 184, 166, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(20, 184, 166, 0.2);">${icon}</div>
+                <div style="font-size: 1.2rem; background: rgba(20, 184, 166, 0.1); padding: 8px; border-radius: 8px; border: 1px solid rgba(20, 184, 166, 0.2); display: flex; align-items: center; justify-content: center;">${icon}</div>
                 <div style="flex-grow: 1;">
                     <strong style="font-size: 0.9rem; color: var(--secondary); display: block; margin-bottom: 4px;">${title}</strong>
                     <p style="font-size: 0.8rem; color: #cbd5e1; margin: 0; line-height: 1.4;">${message}</p>
@@ -2142,7 +2169,7 @@ document.addEventListener('DOMContentLoaded', () => {
             id: selectedOpt.getAttribute('data-id'),
             name: selectedOpt.getAttribute('data-name'),
             price: parseFloat(selectedOpt.getAttribute('data-price')),
-            emoji: selectedOpt.getAttribute('data-emoji') || '📦',
+            emoji: selectedOpt.getAttribute('data-emoji') || 'fa-solid fa-box',
             unit: selectedOpt.getAttribute('data-unit') || '1 Unit',
             variantId: selectedOpt.getAttribute('data-variant-id') || null,
             variantName: selectedOpt.getAttribute('data-variant-name') || null
@@ -2210,6 +2237,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (hasVariants) {
                 elements.prodVariantsSection.style.display = 'block';
                 elements.prodPrice.disabled = true;
+                elements.prodOriginalPrice.disabled = true;
                 elements.prodUnit.disabled = true;
                 elements.prodStock.disabled = true;
                 elements.prodPrice.removeAttribute('required');
@@ -2221,6 +2249,7 @@ document.addEventListener('DOMContentLoaded', () => {
             } else {
                 elements.prodVariantsSection.style.display = 'none';
                 elements.prodPrice.disabled = false;
+                elements.prodOriginalPrice.disabled = false;
                 elements.prodUnit.disabled = false;
                 elements.prodStock.disabled = false;
                 elements.prodPrice.setAttribute('required', '');
@@ -2524,7 +2553,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
             
-            const headers = ['id', 'name', 'variantId', 'variantName', 'category', 'price', 'unit', 'stock', 'desc', 'dietaryType'];
+            const headers = ['id', 'name', 'variantId', 'variantName', 'category', 'price', 'originalPrice', 'unit', 'stock', 'desc', 'dietaryType'];
             const rows = [headers.join(',')];
             
             store.products.forEach(p => {
@@ -2539,6 +2568,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             `"${v.name.replace(/"/g, '""')}"`,
                             p.category,
                             v.price,
+                            v.originalPrice || '',
                             v.unit || '',
                             v.stock,
                             `"${descEscaped}"`,
@@ -2554,6 +2584,7 @@ document.addEventListener('DOMContentLoaded', () => {
                         '',
                         p.category,
                         p.price,
+                        p.originalPrice || '',
                         p.unit || '',
                         p.stock,
                         `"${descEscaped}"`,
@@ -2667,7 +2698,7 @@ document.addEventListener('DOMContentLoaded', () => {
             if (!name || !category) continue;
             
             if (!productsMap[id]) {
-                productsMap[id] = {
+                const prodObj = {
                     id,
                     name,
                     category,
@@ -2678,16 +2709,30 @@ document.addEventListener('DOMContentLoaded', () => {
                     unit,
                     stock
                 };
+                if (row.originalPrice) {
+                    const parsedOrig = parseFloat(row.originalPrice);
+                    if (!isNaN(parsedOrig) && parsedOrig > 0) {
+                        prodObj.originalPrice = parsedOrig;
+                    }
+                }
+                productsMap[id] = prodObj;
             }
             
             if (variantId && variantName) {
-                productsMap[id].variants.push({
+                const variantObj = {
                     id: variantId,
                     name: variantName,
                     price,
                     unit,
                     stock
-                });
+                };
+                if (row.originalPrice) {
+                    const parsedOrig = parseFloat(row.originalPrice);
+                    if (!isNaN(parsedOrig) && parsedOrig > 0) {
+                        variantObj.originalPrice = parsedOrig;
+                    }
+                }
+                productsMap[id].variants.push(variantObj);
             }
         }
         
@@ -2696,6 +2741,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 p.price = p.variants[0].price;
                 p.unit = p.variants[0].unit;
                 p.stock = p.variants.reduce((sum, v) => sum + v.stock, 0);
+                if (p.variants[0].originalPrice) {
+                    p.originalPrice = p.variants[0].originalPrice;
+                }
             } else {
                 delete p.variants;
             }

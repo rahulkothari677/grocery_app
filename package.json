@@ -1,5 +1,8 @@
 {
   "dependencies": {
+    "@capacitor/android": "^8.4.0",
+    "@capacitor/cli": "^8.4.0",
+    "@capacitor/core": "^8.4.0",
     "mongoose": "^9.6.3",
     "node-fetch": "^3.3.2",
     "socket.io-client": "^4.8.3"

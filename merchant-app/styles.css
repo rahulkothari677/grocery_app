@@ -1709,11 +1709,15 @@ footer a:hover {
     font-family: var(--font-heading);
     font-weight: 700;
     font-size: 0.7rem;
-    padding: 4px 8px;
+    padding: 5px 8px 4px 8px;
     border-radius: 6px;
     box-shadow: 0 2px 6px rgba(0,0,0,0.15);
     z-index: 3;
     text-transform: uppercase;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    line-height: 1;
 }
 .product-price-slashed {
     font-size: 0.85rem;
@@ -1827,5 +1831,16 @@ input:-webkit-autofill:active {
     -webkit-box-shadow: 0 0 0 1000px #111827 inset !important;
     -webkit-text-fill-color: #ffffff !important;
     transition: background-color 5000s ease-in-out 0s;
+}
+
+/* Custom Option Text Styling for Select Inputs */
+.glass-input option, select option {
+    background-color: #090d16 !important;
+    color: #f8fafc !important;
+}
+
+body.light-theme .glass-input option, body.light-theme select option {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
 }
 

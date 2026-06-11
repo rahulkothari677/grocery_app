@@ -1,12 +1,12 @@
 // store.js - LuxeGrocer State Management and API Database Client
 
 const CATEGORIES = [
-    { id: 'dairy', name: 'Dairy & Fresh Milk', icon: '🥛', image: 'assets/category_dairy.png' },
-    { id: 'fruits', name: 'Fresh Fruits', icon: '🍎', image: 'assets/category_fruits.png' },
-    { id: 'veggies', name: 'Organic Vegetables', icon: '🥦', image: 'assets/category_veggies.png' },
-    { id: 'bakery', name: 'Bakery & Bread', icon: '🍞', image: 'assets/category_bakery.png' },
-    { id: 'beverages', name: 'Beverages & Juices', icon: '🥤', image: 'assets/category_beverages.png' },
-    { id: 'pantry', name: 'Pantry Staples', icon: '🥫', image: 'assets/category_pantry.png' }
+    { id: 'dairy', name: 'Dairy & Fresh Milk', icon: 'fa-solid fa-cow', image: 'assets/category_dairy.png' },
+    { id: 'fruits', name: 'Fresh Fruits', icon: 'fa-solid fa-apple-whole', image: 'assets/category_fruits.png' },
+    { id: 'veggies', name: 'Organic Vegetables', icon: 'fa-solid fa-carrot', image: 'assets/category_veggies.png' },
+    { id: 'bakery', name: 'Bakery & Bread', icon: 'fa-solid fa-bread-slice', image: 'assets/category_bakery.png' },
+    { id: 'beverages', name: 'Beverages & Juices', icon: 'fa-solid fa-wine-glass', image: 'assets/category_beverages.png' },
+    { id: 'pantry', name: 'Pantry Staples', icon: 'fa-solid fa-box', image: 'assets/category_pantry.png' }
 ];
 
 const USER_LOCATION = {
@@ -17,7 +17,8 @@ const USER_LOCATION = {
 
 class LuxeStore {
     constructor() {
-        this.baseUrl = 'http://localhost:5000/api';
+        const backendHost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:5000' : window.location.hostname + ':5000';
+        this.baseUrl = `${window.location.protocol}//${backendHost}/api`;
         this.tokenKey = 'luxegrocer_customer_auth_token';
         this.token = localStorage.getItem(this.tokenKey) || null;
         this.currentUser = null;
@@ -410,6 +411,38 @@ class LuxeStore {
         } catch (err) {
             console.error("API error verifying OTP:", err);
             return { success: false, msg: 'Server connection error.' };
+        }
+    }
+
+    async getCart() {
+        if (!this.token) return [];
+        try {
+            const res = await fetch(`${this.baseUrl}/cart`, {
+                headers: this.getHeaders()
+            });
+            if (res.ok) {
+                const data = await res.json();
+                return data.cart || [];
+            }
+            return [];
+        } catch (err) {
+            console.error("API error during getCart:", err);
+            return [];
+        }
+    }
+
+    async saveCart(cart) {
+        if (!this.token) return false;
+        try {
+            const res = await fetch(`${this.baseUrl}/cart`, {
+                method: 'POST',
+                headers: this.getHeaders(),
+                body: JSON.stringify({ cart })
+            });
+            return res.ok;
+        } catch (err) {
+            console.error("API error during saveCart:", err);
+            return false;
         }
     }
 

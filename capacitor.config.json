@@ -1,0 +1,9 @@
+{
+  "appId": "com.luxegrocer.app",
+  "appName": "LuxeGrocer",
+  "webDir": "customer-app",
+  "server": {
+    "url": "http://192.168.29.213:8001",
+    "cleartext": true
+  }
+}

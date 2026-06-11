@@ -435,7 +435,7 @@ function readDb() {
                 },
                 {
                     id: "banner-2",
-                    text: "⚡ Flash Sale: Premium Sourdough at Crumb & Grain is now ₹160. Order now!",
+                    text: "Flash Sale: Premium Sourdough at Crumb & Grain is now ₹160. Order now!",
                     imageUrl: "https://images.unsplash.com/photo-1509440159596-0249088772ff?auto=format&fit=crop&q=80&w=1200",
                     linkUrl: "",
                     active: true
@@ -735,12 +735,16 @@ function verifyOrderStatusUpdater(req, res, next) {
     const isCustomer = req.user.role === 'customer' && order.customer && order.customer.userId === req.user.id;
     
     if (isCustomer) {
-        // Customers can only cancel pending orders
+        // Customers can only cancel pending orders OR orders within the 60-second grace cancellation window
         if (req.body.status !== 'Cancelled') {
             return res.status(403).json({ error: 'Forbidden: Customers can only transition order to Cancelled status' });
         }
-        if (order.status !== 'Pending') {
-            return res.status(400).json({ error: 'Order cannot be cancelled because it has already been accepted by the merchant' });
+        
+        const elapsed = Date.now() - new Date(order.timestamp).getTime();
+        const isGraceActive = elapsed <= 60000; // 60 seconds grace window
+        
+        if (order.status !== 'Pending' && !isGraceActive) {
+            return res.status(400).json({ error: 'Order cannot be cancelled because it has already been accepted by the merchant and the grace window has expired' });
         }
         req.order = order;
         return next();
@@ -1015,7 +1019,32 @@ app.post('/api/wallet/add-funds', verifyToken, (req, res) => {
     res.json({ walletBalance: dbData.users[userIdx].walletBalance });
 });
 
+// GET: Fetch authenticated user's cart from database
+app.get('/api/cart', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const user = dbData.users.find(u => u.id === req.user.id);
+    if (!user) return res.status(404).json({ error: 'User not found' });
+    res.json({ cart: user.cart || [] });
+});
+
+// POST: Sync/Replace authenticated user's cart in database
+app.post('/api/cart', verifyToken, (req, res) => {
+    const dbData = readDb();
+    const userIdx = dbData.users.findIndex(u => u.id === req.user.id);
+    if (userIdx === -1) return res.status(404).json({ error: 'User not found' });
+    
+    const { cart } = req.body;
+    if (!Array.isArray(cart)) {
+        return res.status(400).json({ error: 'Cart must be an array.' });
+    }
+    
+    dbData.users[userIdx].cart = cart;
+    writeDb(dbData);
+    res.json({ success: true, cart: dbData.users[userIdx].cart });
+});
+
 // POST: Forgot password (requests OTP reset code)
+
 app.post('/api/auth/forgot-password', (req, res) => {
     const { email } = req.body;
     if (!email) return res.status(400).json({ error: 'Email is required' });
@@ -1674,11 +1703,25 @@ app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) =
     if (isNaN(stockVal) || stockVal < 0) {
         return res.status(400).json({ error: 'Product stock must be a non-negative integer.' });
     }
+
+    let originalPriceVal = null;
+    if (prodData.originalPrice !== undefined && prodData.originalPrice !== null && prodData.originalPrice !== '') {
+        originalPriceVal = parseFloat(prodData.originalPrice);
+        if (isNaN(originalPriceVal) || originalPriceVal < 0) {
+            return res.status(400).json({ error: 'Product original price must be a non-negative number.' });
+        }
+    }
     
     if (prodData.variants && Array.isArray(prodData.variants)) {
         for (const v of prodData.variants) {
             if (!v.name || typeof v.price !== 'number' || v.price < 0 || typeof v.stock !== 'number' || v.stock < 0) {
                 return res.status(400).json({ error: 'All variants must have a valid name, and non-negative price and stock.' });
+            }
+            if (v.originalPrice !== undefined && v.originalPrice !== null && v.originalPrice !== '') {
+                const ov = parseFloat(v.originalPrice);
+                if (isNaN(ov) || ov < 0) {
+                    return res.status(400).json({ error: 'Variant original price must be a non-negative number.' });
+                }
             }
         }
     }
@@ -1690,6 +1733,7 @@ app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) =
             id: v.id || 'var-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             name: sanitizeInput(v.name),
             price: parseFloat(v.price),
+            originalPrice: v.originalPrice !== undefined && v.originalPrice !== null && v.originalPrice !== '' ? parseFloat(v.originalPrice) : null,
             stock: parseInt(v.stock)
           }))
         : null;
@@ -1699,6 +1743,7 @@ app.post('/api/stores/:id/products', verifyToken, verifyStoreOwner, (req, res) =
         name: sanitizeInput(prodData.name),
         category: sanitizeInput(prodData.category),
         price: priceVal,
+        originalPrice: originalPriceVal,
         unit: sanitizeInput(prodData.unit || '1 Unit'),
         stock: stockVal,
         desc: sanitizeInput(prodData.desc || ''),
@@ -1732,6 +1777,14 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
             return res.status(400).json({ error: 'Product price must be a non-negative number.' });
         }
     }
+    if (updated.originalPrice !== undefined) {
+        if (updated.originalPrice !== null && updated.originalPrice !== '') {
+            const opVal = parseFloat(updated.originalPrice);
+            if (isNaN(opVal) || opVal < 0) {
+                return res.status(400).json({ error: 'Product original price must be a non-negative number.' });
+            }
+        }
+    }
     if (updated.stock !== undefined) {
         const stockVal = parseInt(updated.stock);
         if (isNaN(stockVal) || stockVal < 0) {
@@ -1742,6 +1795,12 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
         for (const v of updated.variants) {
             if (!v.name || typeof v.price !== 'number' || v.price < 0 || typeof v.stock !== 'number' || v.stock < 0) {
                 return res.status(400).json({ error: 'All variants must have a valid name, and non-negative price and stock.' });
+            }
+            if (v.originalPrice !== undefined && v.originalPrice !== null && v.originalPrice !== '') {
+                const ov = parseFloat(v.originalPrice);
+                if (isNaN(ov) || ov < 0) {
+                    return res.status(400).json({ error: 'Variant original price must be a non-negative number.' });
+                }
             }
         }
     }
@@ -1755,6 +1814,7 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
             id: v.id || 'var-' + Date.now() + '-' + Math.floor(Math.random() * 1000),
             name: sanitizeInput(v.name),
             price: parseFloat(v.price),
+            originalPrice: v.originalPrice !== undefined && v.originalPrice !== null && v.originalPrice !== '' ? parseFloat(v.originalPrice) : null,
             stock: parseInt(v.stock)
           }))
         : updated.variants === null ? null : dbData.stores[storeIdx].products[prodIdx].variants;
@@ -1764,6 +1824,7 @@ app.put('/api/stores/:id/products/:productId', verifyToken, verifyStoreOwner, (r
         name: updated.name ? sanitizeInput(updated.name) : dbData.stores[storeIdx].products[prodIdx].name,
         category: updated.category ? sanitizeInput(updated.category) : dbData.stores[storeIdx].products[prodIdx].category,
         price: updated.price !== undefined ? parseFloat(updated.price) : dbData.stores[storeIdx].products[prodIdx].price,
+        originalPrice: updated.originalPrice !== undefined ? (updated.originalPrice === null || updated.originalPrice === '' ? null : parseFloat(updated.originalPrice)) : dbData.stores[storeIdx].products[prodIdx].originalPrice,
         unit: updated.unit !== undefined ? sanitizeInput(updated.unit) : dbData.stores[storeIdx].products[prodIdx].unit,
         stock: updated.stock !== undefined ? parseInt(updated.stock) : dbData.stores[storeIdx].products[prodIdx].stock,
         desc: updated.desc !== undefined ? sanitizeInput(updated.desc) : dbData.stores[storeIdx].products[prodIdx].desc,
@@ -1887,6 +1948,29 @@ app.post('/api/orders', verifyToken, (req, res) => {
     for (const item of orderData.items) {
         if (!item.id || !item.name || typeof item.price !== 'number' || item.price < 0 || typeof item.quantity !== 'number' || item.quantity <= 0 || !item.storeId) {
             return res.status(400).json({ error: 'Invalid item details in order items list.' });
+        }
+        
+        const store = storesMap[item.storeId];
+        if (!store) {
+            return res.status(400).json({ error: 'Invalid store for item.' });
+        }
+        
+        const dbProduct = store.products.find(p => p.id === item.id || p.id === item.productId);
+        if (!dbProduct) {
+            return res.status(404).json({ error: `Product "${item.name}" (${item.id}) not found in store "${store.name}".` });
+        }
+        
+        let expectedPrice = dbProduct.price;
+        if (item.variantId) {
+            const variant = dbProduct.variants ? dbProduct.variants.find(v => v.id === item.variantId) : null;
+            if (!variant) {
+                return res.status(400).json({ error: `Variant ${item.variantId} not found for product "${dbProduct.name}".` });
+            }
+            expectedPrice = variant.price;
+        }
+        
+        if (Math.abs(item.price - expectedPrice) > 0.01) {
+            return res.status(400).json({ error: `Price mismatch for item "${item.name}". Expected: ₹${expectedPrice.toFixed(2)}, Received: ₹${item.price.toFixed(2)}.` });
         }
     }
     
@@ -2018,7 +2102,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
                     name: sanitizeInput(item.name),
                     price: parseFloat(item.price),
                     quantity: parseInt(item.quantity),
-                    emoji: item.emoji || '📦',
+                    emoji: item.emoji || 'fa-solid fa-box',
                     unit: sanitizeInput(item.unit || '1 Unit'),
                     variantId: item.variantId || null,
                     variantName: item.variantName || null
@@ -2115,7 +2199,7 @@ app.post('/api/orders', verifyToken, (req, res) => {
                 name: sanitizeInput(item.name),
                 price: parseFloat(item.price),
                 quantity: parseInt(item.quantity),
-                emoji: item.emoji || '📦',
+                emoji: item.emoji || 'fa-solid fa-box',
                 unit: sanitizeInput(item.unit || '1 Unit'),
                 variantId: item.variantId || null,
                 variantName: item.variantName || null
@@ -2208,17 +2292,17 @@ function sendMockNotification(order, oldStatus, newStatus) {
     let mockMessage = "";
     if (newStatus === 'Preparing') {
         mockMessage = `Email sent to merchant: You have a new order #${order.id} to prepare.`;
-        console.log(`\n┌───────────────────────────────────────────────┐\n│  📧 MOCK EMAIL DISPATCHED                     │\n├───────────────────────────────────────────────┤\n│ To: merchant@luxe.com (Store: ${order.storeName}) \n│ Subject: New Order #${order.id} Received     \n│ Body: Please prepare the order.               \n└───────────────────────────────────────────────┘\n`);
+        console.log(`\n┌───────────────────────────────────────────────┐\n│  [EMAIL] MOCK EMAIL DISPATCHED               │\n├───────────────────────────────────────────────┤\n│ To: merchant@luxe.com (Store: ${order.storeName}) \n│ Subject: New Order #${order.id} Received     \n│ Body: Please prepare the order.               \n└───────────────────────────────────────────────┘\n`);
     } else if (newStatus === 'Out for Delivery') {
         const staff = order.deliveryStaff || { name: 'Delivery Partner', phone: '+91 99999 88888' };
         mockMessage = `SMS sent to customer at ${order.customer.phone}: Your LuxeGrocer order #${order.id} is out for delivery with rider ${staff.name} (${staff.phone}). Track: http://localhost:8001/?track=${order.id}`;
-        console.log(`\n┌───────────────────────────────────────────────┐\n│  📱 MOCK SMS DISPATCHED                       │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Dispatched       \n│ Body: Out for delivery with rider ${staff.name} (${staff.phone}).\n└───────────────────────────────────────────────┘\n`);
+        console.log(`\n┌───────────────────────────────────────────────┐\n│  [SMS] MOCK SMS DISPATCHED                     │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Dispatched       \n│ Body: Out for delivery with rider ${staff.name} (${staff.phone}).\n└───────────────────────────────────────────────┘\n`);
     } else if (newStatus === 'Delivered') {
         mockMessage = `SMS sent to customer: Your LuxeGrocer order #${order.id} has been delivered successfully. Thank you for shopping with us!`;
-        console.log(`\n┌───────────────────────────────────────────────┐\n│  📱 MOCK SMS DISPATCHED                       │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Delivered        \n│ Body: Order delivered successfully.           \n└───────────────────────────────────────────────┘\n`);
+        console.log(`\n┌───────────────────────────────────────────────┐\n│  [SMS] MOCK SMS DISPATCHED                     │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Delivered        \n│ Body: Order delivered successfully.           \n└───────────────────────────────────────────────┘\n`);
     } else if (newStatus === 'Cancelled') {
         mockMessage = `SMS sent to customer: Your LuxeGrocer order #${order.id} was cancelled. Refund of payment has been initiated.`;
-        console.log(`\n┌───────────────────────────────────────────────┐\n│  📱 MOCK SMS DISPATCHED                       │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Cancelled        \n│ Body: Your order has been cancelled and refunded.\n└───────────────────────────────────────────────┘\n`);
+        console.log(`\n┌───────────────────────────────────────────────┐\n│  [SMS] MOCK SMS DISPATCHED                     │\n├───────────────────────────────────────────────┤\n│ To: ${order.customer.phone} (${order.customer.name})     \n│ Subject: Order #${order.id} Cancelled        \n│ Body: Your order has been cancelled and refunded.\n└───────────────────────────────────────────────┘\n`);
     }
     
     if (mockMessage) {
@@ -2346,7 +2430,7 @@ app.post('/api/orders/:id/substitution-proposal', verifyToken, verifyOrderStoreO
             id: suggestedProduct.id,
             name: suggestedProduct.name,
             price: parseFloat(suggestedProduct.price),
-            emoji: suggestedProduct.emoji || '📦',
+            emoji: suggestedProduct.emoji || 'fa-solid fa-box',
             unit: suggestedProduct.unit || '1 Unit',
             variantId: suggestedProduct.variantId || null,
             variantName: suggestedProduct.variantName || null
@@ -2762,46 +2846,46 @@ setInterval(() => {
         // Only process active orders
         if (order.status !== 'Delivered' && order.status !== 'Cancelled') {
             
-            // Rule 1: Exceeded assigned preparation time + 30 minutes grace window
-            if (order.acceptedAt && order.prepTimeMinutes !== undefined) {
-                const acceptedTime = new Date(order.acceptedAt);
-                const deadlineTime = new Date(acceptedTime.getTime() + (order.prepTimeMinutes + 30) * 60 * 1000);
+            // Rule 1: Exceeded assigned preparation/delivery time + 30 minutes grace window
+            const placedTime = new Date(order.timestamp);
+            const prepTime = order.prepTimeMinutes !== undefined ? order.prepTimeMinutes : 15;
+            const startTime = order.acceptedAt ? new Date(order.acceptedAt) : placedTime;
+            const deadlineTime = new Date(startTime.getTime() + (prepTime + 30) * 60 * 1000);
+            
+            if (now > deadlineTime) {
+                console.log(`[AUTO-CANCEL] Order #${order.id} delivery deadline exceeded. Auto-cancelling...`);
+                order.status = 'Cancelled';
+                order.statusTimeline.push({
+                    status: 'Cancelled',
+                    time: now.toISOString(),
+                    desc: `Order automatically cancelled as delivery exceeded assigned time (${prepTime} mins) + 30 mins grace window. Refund of ₹${(order.subtotal + order.deliveryFee - order.discount).toFixed(2)} processed.`
+                });
                 
-                if (now > deadlineTime) {
-                    console.log(`[AUTO-CANCEL] Order #${order.id} delivery deadline exceeded. Auto-cancelling...`);
-                    order.status = 'Cancelled';
-                    order.statusTimeline.push({
-                        status: 'Cancelled',
-                        time: now.toISOString(),
-                        desc: `Order automatically cancelled as delivery exceeded assigned time (${order.prepTimeMinutes} mins) + 30 mins grace window. Refund of ₹${(order.subtotal + order.deliveryFee - order.discount).toFixed(2)} processed.`
-                    });
-                    
-                    handleRefundIfCancelled(order, dbData);
-                    
-                    // Restock inventory levels
-                    order.items.forEach(cartItem => {
-                        const store = dbData.stores.find(s => s.id === order.storeId);
-                        if (store) {
-                            const product = store.products.find(p => p.id === cartItem.id);
-                            if (product) {
-                                if (cartItem.variantId && product.variants && product.variants.length > 0) {
-                                    const variant = product.variants.find(v => v.id === cartItem.variantId);
-                                    if (variant) {
-                                        variant.stock += cartItem.quantity;
-                                        console.log(`  Restocked variant ${variant.name} of ${product.name} by ${cartItem.quantity} units.`);
-                                    }
-                                } else {
-                                    product.stock += cartItem.quantity;
-                                    console.log(`  Restocked product ${product.name} by ${cartItem.quantity} units.`);
+                handleRefundIfCancelled(order, dbData);
+                
+                // Restock inventory levels
+                order.items.forEach(cartItem => {
+                    const store = dbData.stores.find(s => s.id === order.storeId);
+                    if (store) {
+                        const product = store.products.find(p => p.id === cartItem.id);
+                        if (product) {
+                            if (cartItem.variantId && product.variants && product.variants.length > 0) {
+                                const variant = product.variants.find(v => v.id === cartItem.variantId);
+                                if (variant) {
+                                    variant.stock += cartItem.quantity;
+                                    console.log(`  Restocked variant ${variant.name} of ${product.name} by ${cartItem.quantity} units.`);
                                 }
+                            } else {
+                                product.stock += cartItem.quantity;
+                                console.log(`  Restocked product ${product.name} by ${cartItem.quantity} units.`);
                             }
                         }
-                    });
-                    
-                    changed = true;
-                    broadcastSync('orders_updated', order.id);
-                    sendMockNotification(order, 'Preparing', 'Cancelled');
-                }
+                    }
+                });
+                
+                changed = true;
+                broadcastSync('orders_updated', order.id);
+                sendMockNotification(order, 'Preparing', 'Cancelled');
             }
             
             // Rule 2: Pending timeout - remained in Pending status for > 30 minutes without acceptance
@@ -3180,6 +3264,25 @@ app.post('/api/stores/:id/products/bulk', verifyToken, verifyStoreOwner, (req, r
         }
         if (typeof p.price !== 'number' || p.price < 0) {
             return res.status(400).json({ error: `Invalid price for product "${p.name}".` });
+        }
+        if (p.originalPrice !== undefined && p.originalPrice !== null && p.originalPrice !== '') {
+            const op = parseFloat(p.originalPrice);
+            if (isNaN(op) || op < 0) {
+                return res.status(400).json({ error: `Invalid originalPrice for product "${p.name}".` });
+            }
+        }
+        if (p.variants && Array.isArray(p.variants)) {
+            for (const v of p.variants) {
+                if (!v.name || typeof v.price !== 'number' || v.price < 0 || typeof v.stock !== 'number' || v.stock < 0) {
+                    return res.status(400).json({ error: `All variants must have a valid name, price, and stock in product "${p.name}".` });
+                }
+                if (v.originalPrice !== undefined && v.originalPrice !== null && v.originalPrice !== '') {
+                    const ov = parseFloat(v.originalPrice);
+                    if (isNaN(ov) || ov < 0) {
+                        return res.status(400).json({ error: `Invalid originalPrice for variant "${v.name}" in product "${p.name}".` });
+                    }
+                }
+            }
         }
     }
     

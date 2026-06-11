@@ -1,10 +1,12 @@
 // admin-app/admin.js - Platform Administration Portal Controller
+const BACKEND_HOST = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1' ? 'localhost:5000' : window.location.hostname + ':5000';
+const BACKEND_URL = `${window.location.protocol}//${BACKEND_HOST}`;
 
 // Intercept console.error to log to server
 const originalConsoleError = console.error;
 console.error = function(...args) {
     originalConsoleError.apply(console, args);
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'admin-app console.error', error: args.join(' ') })
@@ -19,13 +21,13 @@ window.addEventListener('error', (event) => {
         colno: event.colno,
         stack: event.error ? event.error.stack : ''
     };
-    fetch('http://localhost:5000/api/debug-log', {
+    fetch(`${BACKEND_URL}/api/debug-log`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: 'admin-app window.onerror', error: errData })
     }).catch(() => {});
 });
-const BASE_URL = 'http://localhost:5000/api';
+const BASE_URL = `${BACKEND_URL}/api`;
 let token = localStorage.getItem('luxegrocer_admin_auth_token') || '';
 let currentPane = 'dashboard';
 let systemLogs = [];
@@ -821,19 +823,24 @@ async function renderCategoriesTable() {
         return;
     }
 
-    categoriesTableBody.innerHTML = categories.map(c => `
-        <tr style="border-top: 1px solid rgba(255,255,255,0.05);">
-            <td style="padding: 10px; font-size: 1.5rem;">${c.icon || '📦'}</td>
-            <td style="padding: 10px;"><code>${c.id}</code></td>
-            <td style="padding: 10px; font-weight: 500;">${c.name}</td>
-            <td style="padding: 10px;"><code>${c.parentId || '-'}</code></td>
-            <td style="padding: 10px; font-size: 0.85rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><a href="${c.image}" target="_blank" style="color: var(--primary); text-decoration: none;">${c.image}</a></td>
-            <td style="padding: 10px; display: flex; gap: 8px;">
-                <button class="btn-premium btn-sm" onclick="editCategory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.icon || ''}', '${c.parentId || ''}', '${c.image || ''}')"><i class="fa-solid fa-pencil"></i> Edit</button>
-                <button class="btn-premium btn-sm" onclick="deleteCategory('${c.id}')" style="background: var(--danger);"><i class="fa-solid fa-trash"></i> Delete</button>
-            </td>
-        </tr>
-    `).join('');
+    categoriesTableBody.innerHTML = categories.map(c => {
+        const iconHtml = c.icon && c.icon.includes('fa-')
+            ? `<i class="${c.icon}"></i>`
+            : `<i class="fa-solid fa-box"></i>`;
+        return `
+            <tr style="border-top: 1px solid rgba(255,255,255,0.05);">
+                <td style="padding: 10px; font-size: 1.2rem; text-align: center;">${iconHtml}</td>
+                <td style="padding: 10px;"><code>${c.id}</code></td>
+                <td style="padding: 10px; font-weight: 500;">${c.name}</td>
+                <td style="padding: 10px;"><code>${c.parentId || '-'}</code></td>
+                <td style="padding: 10px; font-size: 0.85rem; max-width: 150px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;"><a href="${c.image}" target="_blank" style="color: var(--primary); text-decoration: none;">${c.image}</a></td>
+                <td style="padding: 10px; display: flex; gap: 8px;">
+                    <button class="btn-premium btn-sm" onclick="editCategory('${c.id}', '${c.name.replace(/'/g, "\\'")}', '${c.icon || ''}', '${c.parentId || ''}', '${c.image || ''}')"><i class="fa-solid fa-pencil"></i> Edit</button>
+                    <button class="btn-premium btn-sm" onclick="deleteCategory('${c.id}')" style="background: var(--danger);"><i class="fa-solid fa-trash"></i> Delete</button>
+                </td>
+            </tr>
+        `;
+    }).join('');
 }
 
 window.editCategory = function(id, name, icon, parentId, image) {
